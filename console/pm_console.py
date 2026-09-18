@@ -367,6 +367,7 @@ def compose_prompt(cfg, req, workflow, message, first_turn):
 def build_command(cfg, exe, session_id):
     settings = DATA / "claude-settings.json"
     atomic_write(settings, json.dumps({
+        "disableAllHooks": bool(cfg.get("disable_hooks", True)),
         "permissions": {"allow": cfg.get("allowed_tools") or [],
                         "defaultMode": cfg.get("permission_mode") or "acceptEdits"}
     }, ensure_ascii=False, indent=2))
