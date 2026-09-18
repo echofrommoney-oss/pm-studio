@@ -1,0 +1,18 @@
+# 換行必須鎖死，否則雙擊入口在對方機器上直接起不來。
+#
+# .bat 鎖 CRLF：cmd.exe 對純 LF 的批次檔在 goto / 標籤跳轉上有已知失敗，
+#   而這兩個入口腳本恰恰全靠 goto 做直譯器探測的分支。這裡不能只靠
+#   "Windows 使用者 clone 時 core.autocrlf 會補回來"——實際分發路徑常常是
+#   有人在 Mac 上 clone 完打包成 zip 發出去，那一步沒有 git 參與。
+# .command / .sh 鎖 LF：帶上 CRLF 時 bash 報 `$'\r': command not found`。
+*.bat       text eol=crlf
+*.command   text eol=lf
+*.sh        text eol=lf
+
+# 其餘文字交給 git 自動判定；二進位制顯式標出，避免被當文字改壞。
+*           text=auto
+*.png       binary
+*.jpg       binary
+*.pdf       binary
+*.zip       binary
+*.xlsx      binary

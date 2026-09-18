@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>專案總覽</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2324223a'/%3E%3Crect x='7' y='8' width='18' height='3' rx='1.5' fill='%23fff'/%3E%3Crect x='7' y='14.5' width='13' height='3' rx='1.5' fill='%23fff'/%3E%3Crect x='7' y='21' width='16' height='3' rx='1.5' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{
+  --paper:#f4f4f7; --surface:#fff; --ink:#24223a; --muted:#6c6983; --faint:#9a97ad;
+  --line:#e1dfe9; --line-strong:#cfccdb; --ok:#2f7a55; --warn:#a8641a; --bad:#b3383b;
+  --font:"PingFang TC","Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:14px/1.6 var(--font);color:var(--ink);background:var(--paper)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+header{background:var(--surface);border-bottom:1px solid var(--line)}
+.head{max-width:1180px;margin:0 auto;padding:22px 28px 18px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+h1{font-size:24px;line-height:1.2;margin:0;font-weight:700}
+.summary{color:var(--muted);font-size:14px;margin-top:4px}
+.summary b{color:var(--ink);font-weight:600}
+.summary .warn{color:var(--warn)}
+.tools{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:7px;padding:5px 12px;font-size:13px}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn:disabled{opacity:.5;cursor:wait}
+.add{display:none;max-width:1180px;margin:0 auto;padding:0 28px 16px;gap:8px}
+.add.show{display:flex}
+.add input{flex:1;min-width:0;border:1px solid var(--line-strong);border-radius:7px;padding:6px 10px}
+
+main{max-width:1180px;margin:0 auto;padding:22px 28px 60px}
+.proj{display:grid;grid-template-columns:8px 1fr;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px}
+.proj .band{background:hsl(var(--h) 52% 40%)}
+.proj.missing .band{background:var(--line-strong)}
+.pbody{padding:16px 20px 12px;min-width:0}
+.ptop{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.pname{font-size:18px;font-weight:700;line-height:1.3}
+.ppath{font-size:12px;color:var(--faint);word-break:break-all}
+.facts{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:6px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--faint);margin-right:5px;vertical-align:1px}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)}
+.pact{margin-left:auto;display:flex;gap:8px;align-items:center}
+.linkbtn{border:0;background:none;color:var(--muted);font-size:12.5px;text-decoration:underline;text-underline-offset:3px;padding:0}
+
+.reqs{margin-top:14px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th{font-size:12px;font-weight:500;color:var(--faint);text-align:left;padding:4px 10px 6px;border-bottom:1px solid var(--line)}
+th.stage{text-align:center;width:52px;padding-left:0;padding-right:0}
+td{padding:8px 10px;border-bottom:1px solid #f0eff4;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.rname{font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.stage{text-align:center;padding-left:0;padding-right:0;position:relative}
+/* 流程軌道：每個需求一條，是這一頁唯一的強調 */
+td.stage::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:var(--line);transform:translateY(-50%)}
+td.stage.first::before{left:50%}
+td.stage.last::before{right:50%}
+.pip{position:relative;display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--line-strong)}
+.pip.on{background:hsl(var(--h) 52% 40%);border-color:hsl(var(--h) 52% 40%)}
+.pip.stale{background:#fff;border-color:var(--warn);box-shadow:0 0 0 3px #fbecd9}
+td.when{color:var(--faint);font-size:12.5px;white-space:nowrap;text-align:right}
+td.note{font-size:12.5px;color:var(--warn);min-width:160px}
+.empty-req{color:var(--faint);font-size:13px;padding:10px 0 4px}
+.empty{background:var(--surface);border:1px dashed var(--line-strong);border-radius:12px;padding:40px;text-align:center;color:var(--muted)}
+.empty strong{display:block;color:var(--ink);font-size:16px;margin-bottom:6px}
+code{background:#efeef4;border-radius:4px;padding:1px 5px;font-size:.92em}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;display:none}
+.toast.show{display:block}
+</style>
+</head>
+<body>
+<header>
+  <div class="head">
+    <div>
+      <h1>專案總覽</h1>
+      <div class="summary" id="summary">讀取中…</div>
+    </div>
+    <div class="tools">
+      <button class="btn" id="btn-add">加入專案</button>
+      <button class="btn" id="btn-refresh">重新整理</button>
+    </div>
+  </div>
+  <form class="add" id="add">
+    <input id="add-path" placeholder="貼上專案資料夾的完整路徑，例如 /Users/you/Projects/產品A" aria-label="專案路徑">
+    <button class="btn primary" type="submit">加入</button>
+  </form>
+</header>
+<main id="list"></main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const BOOT = /*__BOOT__*/null;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function ago(t){
+  const s = Date.now()/1000 - t;
+  if (s < 60) return '剛剛'; if (s < 3600) return Math.floor(s/60) + ' 分鐘前';
+  if (s < 86400) return Math.floor(s/3600) + ' 小時前'; if (s < 86400*14) return Math.floor(s/86400) + ' 天前';
+  const d = new Date(t*1000); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+}
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200); }
+async function post(path, body){
+  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json','X-Hub-Token':BOOT.token}, body: JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ('請求失敗 ' + r.status));
+  return d;
+}
+
+const LABEL = {demand:'需求挖掘',prd:'PRD',proto:'原型',flow:'流程圖',proto_shots:'原型截圖',flow_shots:'流程圖截圖',validate:'原型驗證腳本',spec:'技術規格',accept:'驗收清單',launch:'上線文件'};
+
+function render(projects){
+  const reqCount = projects.reduce((n,p) => n + (p.reqs?.length || 0), 0);
+  const stale = projects.reduce((n,p) => n + (p.stale || 0), 0);
+  $('#summary').innerHTML = projects.length
+    ? `<b>${projects.length}</b> 個專案 · <b>${reqCount}</b> 個需求${stale ? ` · <span class="warn">${stale} 份文件待同步</span>` : ' · 全部同步'}`
+    : '還沒有專案';
+  if (!projects.length){
+    $('#list').innerHTML = `<div class="empty"><strong>還沒有專案</strong>用 <code>install.py --project 路徑</code> 安裝後會自動出現在這裡；已經裝好的專案，按右上角「加入專案」貼上路徑。</div>`;
+    return;
+  }
+  $('#list').innerHTML = projects.map(p => {
+    if (p.missing) return `<section class="proj missing"><div class="band"></div><div class="pbody"><div class="ptop"><div><div class="pname">${esc(p.name)}</div><div class="ppath">${esc(p.path)}</div><div class="facts">找不到這個資料夾，可能被移動或刪除了。</div></div><div class="pact"><button class="linkbtn" data-remove="${esc(p.path)}">從清單移除</button></div></div></div></section>`;
+    const head = BOOT.pipeline.map(([,l],i) => `<th class="stage">${esc(l)}</th>`).join('');
+    const rows = p.reqs.map(r => {
+      const staleSet = new Set(r.stale.map(x => x.stage));
+      const cells = BOOT.pipeline.map(([code,l],i) => {
+        const on = r.present.includes(code), st = staleSet.has(code);
+        const title = st ? `${LABEL[code]||l}：落後於 ${r.stale.find(x=>x.stage===code).behind.join('、')}` : on ? `${LABEL[code]||l}：已產出` : `${LABEL[code]||l}：尚未產出`;
+        return `<td class="stage${i===0?' first':''}${i===BOOT.pipeline.length-1?' last':''}"><span class="pip${on?' on':''}${st?' stale':''}" title="${esc(title)}" aria-label="${esc(title)}"></span></td>`;
+      }).join('');
+      const note = r.stale.length ? r.stale.map(x => `${esc(x.label)}落後`).join('、') : '';
+      return `<tr><td class="rname" title="${esc(r.name)}">${esc(r.name)}</td>${cells}<td class="note">${note}</td><td class="when">${ago(r.updated)}</td></tr>`;
+    }).join('');
+    return `<section class="proj" style="--h:${p.hue}">
+      <div class="band"></div>
+      <div class="pbody">
+        <div class="ptop">
+          <div style="min-width:0">
+            <div class="pname">${esc(p.name)}</div>
+            <div class="ppath">${esc(p.path)}</div>
+            <div class="facts">
+              <span><span class="dot ${p.has_design?'ok':'warn'}"></span>${p.has_design?'設計系統已建立':'尚未定設計方向'}</span>
+              <span><span class="dot ${p.console?'ok':''}"></span>${p.console?'工作台開著':'工作台未開'}</span>
+              <span>${p.uncommitted === null ? '<span class="dot"></span>未使用 git' : p.uncommitted ? `<span class="dot warn"></span>${p.uncommitted} 個檔案未提交` : '<span class="dot ok"></span>git 已全部提交'}</span>
+              <span>最近更新 ${ago(p.updated)}</span>
+            </div>
+          </div>
+          <div class="pact">
+            <button class="linkbtn" data-remove="${esc(p.path)}">從清單移除</button>
+            ${p.has_console ? `<button class="btn primary" data-open="${esc(p.path)}">${p.console?'前往工作台':'開啟工作台'}</button>` : '<span class="facts">未安裝工作台</span>'}
+          </div>
+        </div>
+        ${p.reqs.length ? `<div class="reqs"><table><thead><tr><th>需求</th>${head}<th>待同步</th><th style="text-align:right">更新</th></tr></thead><tbody>${rows}</tbody></table></div>`
+          : '<div class="empty-req">還沒有需求。開啟工作台後按「新增需求」。</div>'}
+      </div>
+    </section>`;
+  }).join('');
+  document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openConsole(b));
+  document.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
+    if (!confirm('從總覽移除這個專案？檔案不會被刪除，之後開啟它的工作台會自動加回來。')) return;
+    await post('/api/remove', {path: b.dataset.remove}).catch(e => toast(e.message)); load();
+  });
+}
+
+async function openConsole(btn){
+  const win = window.open('about:blank', '_blank');   // 先開視窗，避免被阻擋彈出視窗
+  btn.disabled = true; const label = btn.textContent; btn.textContent = '啟動中…';
+  try{
+    const r = await post('/api/open', {path: btn.dataset.open});
+    if (win) win.location.href = r.url; else location.href = r.url;
+    setTimeout(load, 800);
+  }catch(e){ if (win) win.close(); toast(e.message); }
+  finally{ btn.disabled = false; btn.textContent = label; }
+}
+
+async function load(){
+  try{
+    const r = await fetch('/api/projects'); const d = await r.json(); render(d.projects || []);
+  }catch(e){ $('#summary').textContent = '讀取失敗：' + e.message; }
+}
+$('#btn-refresh').onclick = load;
+$('#btn-add').onclick = () => { $('#add').classList.toggle('show'); $('#add-path').focus(); };
+$('#add').onsubmit = async e => {
+  e.preventDefault();
+  const path = $('#add-path').value.trim(); if (!path) return;
+  try{ await post('/api/add', {path}); $('#add-path').value = ''; $('#add').classList.remove('show'); load(); }
+  catch(err){ toast(err.message); }
+};
+load();
+setInterval(() => { if (!document.hidden) load(); }, 15000);
+</script>
+</body>
+</html>

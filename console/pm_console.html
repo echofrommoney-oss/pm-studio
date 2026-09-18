@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PM 工作台</title>
+<link rel="icon" id="favicon" href="data:,">
+<style>
+:root{
+  --hue:250;
+  --paper:#f4f4f7; --surface:#ffffff; --ink:#24223a; --muted:#6c6983; --faint:#9a97ad;
+  --line:#e1dfe9; --line-strong:#cfccdb;
+  --accent:hsl(var(--hue) 52% 40%); --accent-ink:hsl(var(--hue) 55% 28%);
+  --accent-soft:hsl(var(--hue) 60% 96%); --accent-mid:hsl(var(--hue) 45% 88%);
+  --ok:#2f7a55; --warn:#a8641a; --bad:#b3383b;
+  --font:"PingFang TC","Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px/1.6 var(--font);color:var(--ink);background:var(--paper);display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+button,textarea,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── 專案識別：整個畫面唯一大膽的地方 ── */
+header{display:flex;align-items:stretch;background:var(--surface);border-bottom:1px solid var(--line);min-height:64px}
+.ident{display:flex;align-items:center;gap:14px;padding:0 22px 0 0;min-width:0}
+.band{width:10px;align-self:stretch;background:var(--accent)}
+.mark{width:38px;height:38px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:19px;font-weight:700;flex:none}
+.pname{font-size:21px;font-weight:700;letter-spacing:.01em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ppath{font-size:12px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+.status{margin-left:auto;display:flex;align-items:center;gap:18px;padding:0 20px;font-size:13px;color:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--faint);margin-right:6px;vertical-align:1px}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+.linkbtn{border:0;background:none;color:var(--accent);padding:0;text-decoration:underline;text-underline-offset:3px}
+
+main{display:grid;grid-template-columns:236px minmax(360px,440px) 1fr;min-height:0}
+section{min-height:0;display:flex;flex-direction:column}
+
+/* ── 需求清單 ── */
+.reqs{border-right:1px solid var(--line);background:var(--paper)}
+.reqs-head{padding:16px 16px 10px;display:flex;align-items:center;justify-content:space-between}
+.reqs-head h2{font-size:13px;font-weight:600;color:var(--muted);margin:0}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:7px;padding:5px 12px;font-size:13px}
+.btn:hover{border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-ink);color:#fff}
+.btn.danger{color:var(--bad);border-color:#e6c3c4}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.newreq{display:none;padding:0 12px 12px;gap:6px}
+.newreq.show{display:flex}
+.newreq input{flex:1;min-width:0;border:1px solid var(--line-strong);border-radius:7px;padding:5px 9px;background:var(--surface)}
+.req-list{list-style:none;margin:0;padding:0 8px 16px;overflow:auto}
+.req-list li button{width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:9px 10px;display:block}
+.req-list li button:hover{background:#ebeaf1}
+.req-list li button[aria-current="true"]{background:var(--surface);box-shadow:inset 3px 0 0 var(--accent)}
+.req-name{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.req-meta{display:block;font-size:12px;color:var(--faint)}
+.req-meta .live{color:var(--accent)}
+.empty-side{padding:6px 18px;color:var(--faint);font-size:13px}
+
+/* ── 對話 ── */
+.chat{background:var(--surface);border-right:1px solid var(--line)}
+.chat-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;min-height:57px}
+.chat-head h2{margin:0;font-size:16px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log{flex:1;overflow:auto;padding:18px 18px 8px}
+.msg{margin:0 0 18px}
+.msg.user{display:flex;flex-direction:column;align-items:flex-end}
+.msg.user .bubble{background:var(--accent-soft);border:1px solid var(--accent-mid);border-radius:12px 12px 3px 12px;padding:9px 13px;max-width:92%;white-space:pre-wrap;word-break:break-word}
+.wf{font-size:12px;color:var(--muted);margin-bottom:4px}
+.msg.ai .body{word-break:break-word}
+.body p{margin:0 0 .6em} .body ul,.body ol{margin:.2em 0 .7em;padding-left:1.4em} .body li{margin:.15em 0}
+.body h3,.body h4{font-size:14px;margin:.9em 0 .3em} .body code{background:#f0eff5;border-radius:4px;padding:0 4px;font-size:.92em;word-break:break-all}
+.meta{font-size:12px;color:var(--faint);margin-top:4px}
+.meta.bad{color:var(--bad)}
+details.acts{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+details.acts summary{cursor:pointer;color:var(--muted)}
+.act{padding:1px 0 1px 12px;border-left:2px solid var(--line);margin-left:3px;word-break:break-all}
+.act b{font-weight:600;color:var(--ink)}
+.act.err{color:var(--bad);border-color:#e8c4c5}
+.denied{margin-top:8px;padding:8px 10px;border-radius:8px;background:#fdf5ec;color:var(--warn);font-size:12.5px}
+.divider{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:12px;margin:4px 0 18px}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.working{border-left:3px solid var(--accent);padding:2px 0 2px 12px}
+.working .now{font-size:12.5px;color:var(--accent-ink);margin-top:6px}
+.welcome{color:var(--muted);padding:26px 4px}
+.welcome h3{color:var(--ink);font-size:16px;margin:0 0 6px}
+
+.composer{border-top:1px solid var(--line);padding:12px 14px 14px;background:var(--surface)}
+.wfs{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:start;margin-bottom:9px}
+.wfg{font-size:12px;color:var(--faint);padding-top:4px;white-space:nowrap}
+.wfrow{display:flex;flex-wrap:wrap;gap:6px}
+.wfs label{position:relative}
+.wfs input{position:absolute;opacity:0;pointer-events:none}
+.wfs label span{display:inline-block;border:1px solid var(--line-strong);border-radius:999px;padding:3px 11px;font-size:12.5px;color:var(--muted);cursor:pointer}
+.wfs input:checked+span{background:var(--ink);border-color:var(--ink);color:#fff}
+.wfs input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+textarea{width:100%;resize:none;border:1px solid var(--line-strong);border-radius:9px;padding:9px 11px;min-height:78px;max-height:240px;background:var(--surface);line-height:1.55}
+textarea:focus{border-color:var(--accent);outline:none}
+.send-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.hint{font-size:12px;color:var(--faint);flex:1}
+
+/* ── 預覽 ── */
+.preview{background:var(--paper)}
+.pv-head{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface);min-height:57px}
+.pv-head select{flex:1;min-width:0;border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--surface)}
+.pv-note{padding:8px 16px;font-size:12.5px;color:var(--warn);background:#fdf6ee;border-bottom:1px solid #f1e2cf}
+.pv-body{flex:1;min-height:0;position:relative}
+.pv-body iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.pv-empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px}
+.pv-empty strong{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.pv-sync{padding:9px 16px;font-size:13px;background:#fff7ed;color:#8a4b0f;border-bottom:1px solid #f3dcc0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pv-sync[hidden]{display:none}
+.pv-sync b{font-weight:600}
+.req-meta .warn{color:var(--warn)}
+.banner{padding:9px 20px;background:#fbeeee;color:var(--bad);font-size:13px;border-bottom:1px solid #f0d3d4}
+@media (prefers-reduced-motion:no-preference){.working .now{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.55}}
+</style>
+</head>
+<body>
+<header>
+  <div class="ident">
+    <div class="band" aria-hidden="true"></div>
+    <div class="mark" id="mark" aria-hidden="true"></div>
+    <div style="min-width:0">
+      <div class="pname" id="pname"></div>
+      <div class="ppath" id="ppath"></div>
+    </div>
+  </div>
+  <div class="status">
+    <span id="st-claude"></span>
+    <span id="st-export"></span>
+    <span id="st-design"></span>
+  </div>
+</header>
+
+<main id="app">
+  <section class="reqs" aria-label="需求">
+    <div class="reqs-head">
+      <h2>需求</h2>
+      <button class="btn" id="btn-new">新增需求</button>
+    </div>
+    <form class="newreq" id="newreq">
+      <input id="newreq-name" placeholder="例如：課後作業提醒" maxlength="60" aria-label="需求名稱">
+      <button class="btn primary" type="submit">建立</button>
+    </form>
+    <ul class="req-list" id="req-list"></ul>
+  </section>
+
+  <section class="chat" aria-label="對話">
+    <div class="chat-head">
+      <h2 id="chat-title">尚未選擇需求</h2>
+      <button class="btn" id="btn-reset" hidden title="讓 Claude 從頭開始，已產出的檔案不受影響">開新對話</button>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="composer">
+      <div class="wfs" id="wfs" role="radiogroup" aria-label="工作流"></div>
+      <textarea id="input" placeholder="描述需求，或告訴 Claude 要改哪裡" disabled></textarea>
+      <div class="send-row">
+        <span class="hint" id="hint">⌘ / Ctrl + Enter 送出</span>
+        <button class="btn danger" id="btn-stop" hidden>停止</button>
+        <button class="btn primary" id="btn-send" disabled>送出</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="preview" aria-label="成品預覽">
+    <div class="pv-head">
+      <select id="pv-select" aria-label="選擇成品" disabled><option>還沒有成品</option></select>
+      <button class="btn" id="btn-reload" disabled>重新整理</button>
+      <button class="btn" id="btn-open" disabled>新分頁開啟</button>
+    </div>
+    <div class="pv-sync" id="pv-sync" hidden></div>
+    <div class="pv-note" id="pv-note" hidden></div>
+    <div class="pv-body" id="pv-body">
+      <div class="pv-empty" id="pv-empty"><div><strong>成品會出現在這裡</strong>PRD、原型、流程圖產出後自動顯示。</div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const BOOT = /*__BOOT__*/null;
+const $ = s => document.querySelector(s);
+const S = {req:null, reqData:null, state:null, run:null, es:null, live:null, artifacts:[], selected:null, poll:null};
+
+/* ── 專案識別 ── */
+document.documentElement.style.setProperty('--hue', BOOT.hue);
+document.title = BOOT.project + ' · PM 工作台';
+$('#pname').textContent = BOOT.project;
+$('#ppath').textContent = BOOT.root;
+$('#mark').textContent = [...BOOT.project][0] || 'P';
+(() => {
+  const c = `hsl(${BOOT.hue} 52% 40%)`, ch = ([...BOOT.project][0]||'P').replace(/[<&]/g,'');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${c}"/><text x="16" y="23" font-size="19" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">${ch}</text></svg>`;
+  $('#favicon').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+})();
+
+/* ── 工具 ── */
+async function api(path, body){
+  const opt = body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Console-Token':BOOT.token}, body:JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ('請求失敗 ' + r.status));
+  return data;
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function md(src){
+  const lines = String(src||'').replace(/\r/g,'').split('\n'); let html = '', list = null;
+  const inline = t => esc(t).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  const close = () => { if (list){ html += `</${list}>`; list = null; } };
+  for (const raw of lines){
+    const l = raw.trimEnd();
+    let m;
+    if (!l.trim()){ close(); continue; }
+    if ((m = l.match(/^#{1,4}\s+(.*)/))){ close(); html += `<h4>${inline(m[1])}</h4>`; continue; }
+    if ((m = l.match(/^\s*[-*•]\s+(.*)/))){ if (list !== 'ul'){ close(); html += '<ul>'; list='ul'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    if ((m = l.match(/^\s*\d+[.)、]\s+(.*)/))){ if (list !== 'ol'){ close(); html += '<ol>'; list='ol'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    if (/^\|?[-:\s|]+\|?$/.test(l) && l.includes('-')) continue;
+    close(); html += `<p>${inline(l)}</p>`;
+  }
+  close(); return html;
+}
+function ago(t){
+  const s = Date.now()/1000 - t;
+  if (s < 60) return '剛剛'; if (s < 3600) return Math.floor(s/60) + ' 分鐘前';
+  if (s < 86400) return Math.floor(s/3600) + ' 小時前';
+  const d = new Date(t*1000); return `${d.getMonth()+1}/${d.getDate()}`;
+}
+const dur = s => s >= 60 ? `${Math.floor(s/60)} 分 ${Math.round(s%60)} 秒` : `${Math.round(s)} 秒`;
+const TOOL = {Read:'讀取',Write:'寫入',Edit:'修改',MultiEdit:'修改',Glob:'搜尋檔案',Grep:'搜尋內容',Bash:'執行',TodoWrite:'整理待辦',WebFetch:'讀網頁',WebSearch:'搜尋網路',Task:'分派子任務'};
+const actLine = a => `<div class="act${a.err?' err':''}"><b>${esc(TOOL[a.name]||a.name||'')}</b> ${esc(a.summary||a.text||'')}</div>`;
+
+/* ── 工作流選項 ── */
+(() => {
+  const groups = [];
+  BOOT.workflows.forEach(w => { let g = groups.find(x => x.name === w.group); if (!g) groups.push(g = {name: w.group, items: []}); g.items.push(w); });
+  let first = true;
+  $('#wfs').innerHTML = groups.map(g => `<span class="wfg">${esc(g.name)}</span><div class="wfrow">` + g.items.map(w => {
+    const html = `<label><input type="radio" name="wf" value="${esc(w.id)}" ${first?'checked':''}><span>${esc(w.label)}</span></label>`;
+    first = false; return html; }).join('') + '</div>').join('');
+})();
+function pickWorkflow(id){ const r = document.querySelector(`input[name=wf][value="${id}"]`); if (r) r.checked = true; }
+
+/* ── 狀態 ── */
+async function refreshState(){
+  try{ S.state = await api('/api/state'); }catch(e){ return; }
+  const st = S.state;
+  $('#st-claude').innerHTML = st.claude ? '<span class="dot ok"></span>Claude Code 已連線' : '<span class="dot bad"></span>找不到 Claude Code';
+  const ex = st.export;
+  $('#st-export').innerHTML = !ex.installed ? '<span class="dot"></span>未安裝匯出服務'
+    : ex.alive ? '<span class="dot ok"></span>匯出服務運作中'
+    : ex.starting ? '<span class="dot warn"></span>匯出服務啟動中…'
+    : '<span class="dot warn"></span>匯出服務未啟動 <button class="linkbtn" id="btn-export">啟動</button>';
+  const b = $('#btn-export'); if (b) b.onclick = startExport;
+  $('#st-design').innerHTML = !st.design_installed ? '<span class="dot"></span>未安裝設計層'
+    : st.has_design_md ? '<span class="dot ok"></span>DESIGN.md 已建立'
+    : '<span class="dot warn"></span>尚未定設計方向';
+  renderBanner(); renderReqs();
+  if (st.run && !st.run.done && (!S.run || S.run.id !== st.run.id)) attachRun(st.run);
+  updateComposer();
+}
+function renderBanner(){
+  let msg = '';
+  if (!S.state.claude) msg = '找不到 claude 指令。請先安裝 Claude Code，並在終端機執行一次 claude 完成登入，再重新開啟工作台。';
+  else if (!S.state.workflow_installed) msg = '這個專案還沒裝 studio-pm-workflow（缺 .agents/workflows/）。工作流按鈕會找不到規範檔，請先執行安裝器。';
+  let el = $('#banner');
+  if (!msg){ el && el.remove(); return; }
+  if (!el){ el = document.createElement('div'); el.id='banner'; el.className='banner'; document.body.insertBefore(el, $('#app')); document.body.style.gridTemplateRows='auto auto 1fr'; }
+  el.textContent = msg;
+}
+async function startExport(){
+  try{ await api('/api/export/start', {}); }catch(e){ alert(e.message); }
+  refreshState(); setTimeout(() => S.req && loadReq(S.req, true), 4000);
+}
+
+/* ── 需求清單 ── */
+function renderReqs(){
+  const reqs = S.state?.reqs || [];
+  const running = S.state?.run && !S.state.run.done ? S.state.run.req : null;
+  $('#req-list').innerHTML = reqs.length ? reqs.map(r => `
+    <li><button data-req="${esc(r.name)}" aria-current="${r.name===S.req}">
+      <span class="req-name">${esc(r.name)}</span>
+      <span class="req-meta">${r.name===running ? '<span class="live">執行中</span>' : ago(r.updated)}${r.count ? ` · ${r.count} 個檔案` : ''}${r.stale ? ` · <span class="warn">${r.stale} 份待同步</span>` : ''}</span>
+    </button></li>`).join('') : '<li class="empty-side">還沒有需求。按「新增需求」開始。</li>';
+  $('#req-list').querySelectorAll('button').forEach(b => b.onclick = () => selectReq(b.dataset.req));
+}
+$('#btn-new').onclick = () => { $('#newreq').classList.toggle('show'); $('#newreq-name').focus(); };
+$('#newreq').onsubmit = async e => {
+  e.preventDefault();
+  const name = $('#newreq-name').value.trim(); if (!name) return;
+  try{ const r = await api('/api/req/create', {name}); $('#newreq-name').value=''; $('#newreq').classList.remove('show'); await refreshState(); selectReq(r.name); }
+  catch(err){ alert(err.message); }
+};
+
+async function selectReq(name){
+  S.req = name; S.selected = null;
+  localStorage.setItem('pm-console:' + BOOT.root, name);
+  renderReqs(); await loadReq(name);
+}
+async function loadReq(name, keepSelection){
+  try{ S.reqData = await api('/api/req?name=' + encodeURIComponent(name)); }
+  catch(e){ S.reqData = null; return; }
+  $('#chat-title').textContent = name;
+  $('#btn-reset').hidden = !S.reqData.has_session;
+  renderLog(); renderArtifacts(keepSelection); renderSync(); updateComposer();
+}
+function renderSync(){
+  const el = $('#pv-sync'); const st = S.reqData?.stale || [];
+  if (!st.length){ el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<span>${st.map(x => `<b>${esc(x.label)}</b> 落後於 ${esc(x.behind.join('、'))}`).join('；')}</span><button class="btn" id="btn-sync">同步到最新</button>`;
+  $('#btn-sync').onclick = () => {
+    pickWorkflow('change');
+    $('#input').value = '把落後的文件同步到最新：' + st.map(x => `${x.label}（落後於 ${x.behind.join('、')}）`).join('、') + '。';
+    autosize(); $('#input').focus();
+  };
+}
+
+/* ── 對話紀錄 ── */
+function renderLog(){
+  const msgs = S.reqData?.messages || [];
+  let html = '';
+  if (!msgs.length && !(S.live && S.live.req === S.req)){
+    html = `<div class="welcome"><h3>從一句話開始</h3>
+      新產品先按「設計方向」定這個產品的長相（一個問題就能開始），再選「PRD＋原型」描述需求。例如：「訂閱制的線上課程平台，學員可以收藏課程、追蹤進度，到期前一週提醒續訂。」<br><br>
+      Claude 會先問幾個確認問題，你在這裡回答後，它才會開始寫。訪談逐字稿、客戶檔案這類原始材料，放進這個需求資料夾裡的「素材」即可。</div>`;
+  }
+  for (const m of msgs){
+    if (m.role === 'divider'){ html += `<div class="divider">${esc(m.text)}</div>`; continue; }
+    if (m.role === 'user'){ html += `<div class="msg user"><div class="wf">${esc(m.workflow||'')}</div><div class="bubble">${esc(m.text)}</div></div>`; continue; }
+    const tools = m.tools || [];
+    html += `<div class="msg ai"><div class="body">${md(m.text) || '<p class="meta">（沒有文字回覆）</p>'}</div>
+      ${tools.length ? `<details class="acts"><summary>做了 ${tools.length} 個動作</summary>${tools.map(actLine).join('')}</details>` : ''}
+      ${m.denials?.length ? `<div class="denied">有 ${m.denials.length} 個動作被權限擋下：${esc(m.denials.slice(0,4).join('、'))}。需要的話，把它加進 .pm-console/config.json 的 allowed_tools。</div>` : ''}
+      <div class="meta${m.ok===false?' bad':''}">${m.ok===false?'未完成 · ':''}${m.seconds!=null?dur(m.seconds):''}${m.cost!=null?` · 用量約當 US$${Number(m.cost).toFixed(2)}`:''}</div></div>`;
+  }
+  if (S.live && S.live.req === S.req) html += liveHtml();
+  const log = $('#log'); const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  log.innerHTML = html;
+  if (atBottom || S.live) log.scrollTop = log.scrollHeight;
+}
+function liveHtml(){
+  const L = S.live;
+  const last = L.acts[L.acts.length-1];
+  const secs = (Date.now() - L.t0)/1000;
+  return `<div class="msg ai working" id="live">
+    <div class="body">${L.texts.length ? md(L.texts.join('\n\n')) : '<p class="meta">Claude 正在閱讀工作流與專案…</p>'}</div>
+    ${L.acts.length ? `<details class="acts"><summary>已做 ${L.acts.length} 個動作</summary>${L.acts.map(actLine).join('')}</details>` : ''}
+    <div class="now">${last ? `${esc(TOOL[last.name]||last.name||'')} ${esc(last.summary||last.text||'')}` : '準備中'} · ${dur(secs)}</div></div>`;
+}
+
+/* ── 執行 ── */
+function attachRun(run){
+  S.run = run;
+  S.live = {req: run.req, texts: [], acts: [], t0: Date.now()};
+  if (S.es) S.es.close();
+  const es = new EventSource(`/api/stream?run=${run.id}&from=0&token=${encodeURIComponent(BOOT.token)}`);
+  S.es = es;
+  let fileTimer = null;
+  es.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    const L = S.live; if (!L) return;
+    if (ev.t === 'text') L.texts.push(ev.text);
+    else if (ev.t === 'tool') L.acts.push({name: ev.name, summary: ev.summary});
+    else if (ev.t === 'tool_error') L.acts.push({name: '錯誤', text: ev.text, err: true});
+    else if (ev.t === 'file' && run.req === S.req){ clearTimeout(fileTimer); fileTimer = setTimeout(() => loadReq(S.req, true), 1200); }
+    else if (ev.t === 'end'){ es.close(); finishRun(); return; }
+    if (run.req === S.req) renderLog();
+  };
+  es.onerror = () => { if (es.readyState === 2) finishRun(); };
+  clearInterval(S.poll);
+  S.poll = setInterval(() => { if (S.live && S.live.req === S.req){ const n = document.querySelector('#live .now'); if (n) n.textContent = n.textContent.replace(/·[^·]*$/, '· ' + dur((Date.now()-S.live.t0)/1000)); } }, 1000);
+  updateComposer();
+}
+async function finishRun(){
+  clearInterval(S.poll);
+  const req = S.run?.req; S.run = null; S.live = null; S.es = null;
+  await refreshState();
+  if (req && req === S.req) await loadReq(req, true);
+  updateComposer();
+}
+function updateComposer(){
+  const busy = S.state?.run && !S.state.run.done || !!S.live;
+  const otherBusy = busy && S.live && S.live.req !== S.req;
+  const can = !!S.req && !busy && S.state?.claude;
+  $('#input').disabled = !S.req || !S.state?.claude;
+  $('#btn-send').disabled = !can;
+  $('#btn-stop').hidden = !(busy && !otherBusy);
+  $('#hint').textContent = !S.req ? '先在左邊選一個需求' : otherBusy ? `「${S.live.req}」執行中，結束後才能送出` : busy ? 'Claude 正在處理，可以先打下一則' : '⌘ / Ctrl + Enter 送出';
+}
+async function send(){
+  const message = $('#input').value.trim();
+  if (!message || !S.req || $('#btn-send').disabled) return;
+  const workflow = document.querySelector('input[name=wf]:checked').value;
+  $('#btn-send').disabled = true;
+  try{
+    const r = await api('/api/run', {req: S.req, workflow, message});
+    $('#input').value = ''; autosize();
+    await loadReq(S.req, true);
+    S.state.run = {id: r.run, req: S.req, done: false};
+    attachRun({id: r.run, req: S.req});
+    renderReqs(); renderLog();
+  }catch(e){ alert(e.message); updateComposer(); }
+}
+$('#btn-send').onclick = send;
+$('#input').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); send(); } });
+function autosize(){ const t = $('#input'); t.style.height='auto'; t.style.height = Math.min(240, Math.max(78, t.scrollHeight+2)) + 'px'; }
+$('#input').addEventListener('input', autosize);
+$('#btn-stop').onclick = async () => { if (confirm('停止這次執行？已寫入的檔案會保留。')) await api('/api/stop', {}).catch(e => alert(e.message)); };
+$('#btn-reset').onclick = async () => {
+  if (!confirm('開新對話後，Claude 不會記得這個需求之前談過的內容（檔案都保留）。確定嗎？')) return;
+  await api('/api/req/reset', {name: S.req}).catch(e => alert(e.message)); loadReq(S.req, true);
+};
+
+/* ── 成品預覽 ── */
+const GROUP = {'設計':'設計系統'};
+function renderArtifacts(keep){
+  const items = S.reqData?.artifacts || [];
+  const sel = $('#pv-select');
+  const prev = keep ? S.selected : null;
+  S.artifacts = items;
+  if (!items.length){
+    sel.innerHTML = '<option>還沒有成品</option>'; sel.disabled = true;
+    $('#btn-reload').disabled = $('#btn-open').disabled = true;
+    showFrame(null); return;
+  }
+  const groups = {};
+  items.forEach((it,i) => (groups[it.group] ||= []).push([it,i]));
+  sel.innerHTML = Object.entries(groups).map(([g, list]) =>
+    `<optgroup label="${esc(GROUP[g]||g)}">${list.map(([it,i]) => `<option value="${i}">${esc(it.name)}</option>`).join('')}</optgroup>`).join('');
+  sel.disabled = false; $('#btn-reload').disabled = $('#btn-open').disabled = false;
+  let idx = prev ? items.findIndex(it => it.rel === prev) : -1;
+  if (idx >= 0 && items[idx].group === '設計' && items.some(it => it.kind === 'html')) idx = -1; // 新原型出現時從設計檔切到原型
+  if (idx < 0){ idx = items.findIndex(it => it.group === '需求文件' && it.kind === 'html'); }
+  if (idx < 0){ idx = items.findIndex(it => it.kind === 'html'); }
+  if (idx < 0) idx = 0;
+  sel.value = String(idx);
+  showFrame(items[idx], prev === items[idx].rel);
+}
+function showFrame(it, sameAsBefore){
+  const body = $('#pv-body');
+  const note = $('#pv-note');
+  if (!it){ body.innerHTML = `<div class="pv-empty"><div><strong>${S.req ? '這個需求還沒有成品' : '成品會出現在這裡'}</strong>PRD、原型、流程圖產出後自動顯示。</div></div>`; note.hidden = true; S.selected = null; return; }
+  const ex = S.state?.export;
+  note.hidden = !(it.kind === 'html' && ex?.installed && !ex.alive);
+  note.innerHTML = '匯出服務沒在運作：可以預覽，但截圖匯出、一鍵複製全文、編輯後存檔不能用。 <button class="linkbtn" id="btn-export2">啟動匯出服務</button>';
+  const b = $('#btn-export2'); if (b) b.onclick = startExport;
+  let frame = body.querySelector('iframe');
+  const src = it.full + (it.full.includes('?') ? '&' : '?') + 't=' + Math.round(it.mtime);
+  if (!frame){ body.innerHTML = ''; frame = document.createElement('iframe'); frame.title = '成品預覽'; body.appendChild(frame); }
+  if (!(sameAsBefore && frame.dataset.src === src)){ frame.src = src; frame.dataset.src = src; }
+  S.selected = it.rel;
+}
+$('#pv-select').onchange = e => showFrame(S.artifacts[+e.target.value]);
+$('#btn-reload').onclick = () => { const f = $('#pv-body iframe'); if (f){ f.src = f.dataset.src.replace(/t=\d+/, 't=' + Date.now()); } };
+$('#btn-open').onclick = () => { const it = S.artifacts.find(a => a.rel === S.selected); if (it) window.open(it.full, '_blank', 'noopener'); };
+
+/* ── 啟動 ── */
+(async () => {
+  await refreshState();
+  const saved = localStorage.getItem('pm-console:' + BOOT.root);
+  const reqs = S.state?.reqs || [];
+  const pick = S.state?.run && !S.state.run.done ? S.state.run.req : (reqs.find(r => r.name === saved) ? saved : reqs[0]?.name);
+  if (pick) selectReq(pick);
+  setInterval(() => { if (!S.live) refreshState(); }, 8000);
+})();
+</script>
+</body>
+</html>
