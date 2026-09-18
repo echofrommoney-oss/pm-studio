@@ -89,28 +89,10 @@ git config --global user.email "你的信箱"
 └─ 設計層說明.md
 ```
 
-## 把這個套件放上 GitHub
-
-套件已附 `.gitignore` 與 `.gitattributes`（鎖定 `.command` 用 LF、`.bat` 用 CRLF，Windows 與 Mac 互傳才不會壞）。解壓後：
-
-```bash
-cd pm-studio
-git init -b main
-git add -A
-git commit -m "PM Studio 工作流"
-git remote add origin <你的儲存庫網址>
-git push -u origin main
-```
-
-工作流本體改自沒有授權條款的原專案，**建議用私人儲存庫**，要公開前先向原作者確認。之後更新套件，在各產品專案重跑 `install.py` 即可。
-
 ## 語言
 
-工作流、工作台、總覽、安裝器、接線說明全部繁體中文（台灣用語），無簡體殘留。六組上游設計 skill 保持英文原文以便追更新；Claude 讀英文規則、用繁體回覆。
+工作流、工作台、總覽、安裝器、接線說明全部繁體中文（台灣用語）。六組上游設計 skill 保持英文原文以便追更新；Claude 讀英文規則、用繁體回覆。
 
-## 授權
-
-工作流本體改自 beautfulmt/PM-K12--skills（無授權條款檔，對外分發前建議先向原作者確認）。設計層六組工具為 MIT 或 Apache 2.0，原文在 `design-layer/licenses/`。
 
 ## 已知限制
 
