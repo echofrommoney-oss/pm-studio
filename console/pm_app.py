@@ -20,18 +20,25 @@ import pm_dev
 
 ROOT = None
 DATA = None
+PID = ""
 RUNS = {}          # "web" / "device" -> FlutterRun
 _DEVTOOLS = {"proc": None, "url": ""}
 SCREEN_MARK = re.compile(r"//\s*pm-screen:\s*([\w\-/\[\]]+)")
 
 
-def init(root, data):
-    global ROOT, DATA
-    ROOT, DATA = Path(root), Path(data)
+def init(root, data, project_id=""):
+    global ROOT, DATA, PID
+    ROOT, DATA, PID = Path(root), Path(data), project_id
+
+
+def flutter_service():
+    import pm_services
+    return next((s for s in pm_services.services(PID) if s["adapter"] == "flutter"), None)
 
 
 def app_dir():
-    return ROOT / "app"
+    svc = flutter_service()
+    return ROOT / (svc["dir"] if svc and svc["dir"] else "app")
 
 
 def has_app():
@@ -92,21 +99,21 @@ def launch_emulator(emu_id, timeout=240):
 # ───────────── 設定：後端網址 ─────────────
 
 def write_defines(target):
-    """依執行目標寫 Supabase 設定檔，給 --dart-define-from-file 用；檔案在 app/.pm/（不進 git）。"""
-    st = pm_dev.supabase_status()
-    url = st.get("api", "") if st.get("running") else ""
-    if target == "android" and url:
-        url = url.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2")
+    """依執行目標寫後端設定，給 --dart-define-from-file 用；檔案在 <APP 資料夾>/.pm/（不進 git）。
+    Android 模擬器連不到 127.0.0.1，網址會自動換成 10.0.2.2。"""
+    import pm_services
+    v = pm_services.variables(PID, "android" if target == "android" else "")
     folder = app_dir() / ".pm"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"defines-{target}.json"
-    path.write_text(json.dumps({"SUPABASE_URL": url, "SUPABASE_ANON_KEY": st.get("anon", "") if url else "",
-                                "APP_ENV": "local"}, indent=2), encoding="utf-8")
+    data = {"SUPABASE_URL": v.get("SUPABASE_URL", ""), "SUPABASE_ANON_KEY": v.get("SUPABASE_ANON_KEY", ""),
+            "BACKEND_URL": v.get("BACKEND_URL", ""), "API_URL": v.get("API_URL", ""), "APP_ENV": "local"}
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     gi = folder / ".gitignore"
     if not gi.exists():
         gi.write_text("*\n", encoding="utf-8")
-    if not url:
-        pm_dev.log("app", "⚠️ 本機 Supabase 沒在執行，APP 會拿不到後端網址；需要資料時先啟動 Supabase 再按重新啟動。")
+    if not data["BACKEND_URL"]:
+        pm_dev.log("app", "⚠️ 沒有執行中的後端，APP 會拿不到後端網址；需要資料時先啟動後端再按重新啟動。")
     return path
 
 
@@ -215,7 +222,7 @@ def start(kind, project_id, device=None):
     if not flutter():
         raise RuntimeError("找不到 flutter 指令，請先安裝 Flutter SDK。")
     if not has_app():
-        raise RuntimeError("還沒有 Flutter 專案。先選「開發」→「APP」讓 Claude 建立 app/。")
+        raise RuntimeError(f"還沒有 Flutter 專案。先選「開發」→「APP」讓 Claude 建立 {app_dir().relative_to(ROOT).as_posix()}/。")
     cur = RUNS.get(kind)
     if cur and cur.state in ("starting", "running"):
         raise RuntimeError("已經在執行了")

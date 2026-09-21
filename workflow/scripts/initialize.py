@@ -62,6 +62,7 @@ MAPPING = [
     ("workflows/pm-sysdesign.md",      ".agents/workflows/pm-sysdesign.md",      CUSTOM),
     ("workflows/pm-backend.md",        ".agents/workflows/pm-backend.md",        CUSTOM),
     ("workflows/pm-app.md",            ".agents/workflows/pm-app.md",            CUSTOM),
+    ("workflows/pm-frontend.md",       ".agents/workflows/pm-frontend.md",       CUSTOM),
     ("workflows/pm-validate.md",       ".agents/workflows/pm-validate.md",       CUSTOM),
     ("workflows/pm-launch.md",         ".agents/workflows/pm-launch.md",         CUSTOM),
     ("templates/prd-content.html",         "scripts/prd-content.html",                   CUSTOM),
@@ -94,7 +95,7 @@ STALE = ["scripts/setup_prototype_export_watcher.sh"]
 
 GITIGNORE = ["/.pm-workflow/", "/scripts/pm-runtime-config.js", "/scripts/.venv/", "/.handoff/", "__pycache__/", ".DS_Store",
              "/supabase/.temp/", "/supabase/.branches/", "/supabase/functions/.env", ".env", ".env.local",
-             "/app/.pm/"]
+             "/app/.pm/", ".pm/", "node_modules/", ".next/"]
 
 # Windows 的 core.autocrlf=true 檢出後再傳回 Mac，.command 會帶上 CRLF，
 # bash 報 `$'\r': command not found`；.bat 反過來需要 CRLF 才可靠。

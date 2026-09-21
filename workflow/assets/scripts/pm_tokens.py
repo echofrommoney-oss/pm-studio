@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """把 DESIGN.md 開頭的設計 token 轉成程式用的檔案，讓設計只有一個來源。
 
-  python3 scripts/pm_tokens.py dart     產生 app/lib/theme/tokens.dart（Flutter）
-  python3 scripts/pm_tokens.py css      產生 web/shared/tokens.css（網站，第三階段用）
-  python3 scripts/pm_tokens.py show     只列出讀到的 token
+  python3 scripts/pm_tokens.py dart --out app/lib/theme/tokens.dart      Flutter
+  python3 scripts/pm_tokens.py css  --out web/admin/styles/tokens.css    網站（CSS 變數）
+  python3 scripts/pm_tokens.py ts   --out mobile/src/theme/tokens.ts     React Native／TypeScript
+  python3 scripts/pm_tokens.py show                                      只列出讀到的 token
+不帶 --out 時：dart → app/lib/theme/tokens.dart、css → web/shared/tokens.css、ts → src/theme/tokens.ts。
 
 支援的 DESIGN.md frontmatter 寫法：
   colors: { primary: "#1F3A5F", surface: "#FBFAF7" }     單行
@@ -13,6 +15,7 @@
 產生的檔案開頭會註明「請勿手改」；DESIGN.md 改了就重跑。
 """
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -155,10 +158,31 @@ def to_css(tokens):
     return "\n".join(lines)
 
 
+def to_ts(tokens):
+    lines = ["// 由 scripts/pm_tokens.py 依 DESIGN.md 產生，請勿手改；DESIGN.md 改了就重跑。", "export const tokens = {"]
+    groups = {}
+    for group, sub, v in flatten(tokens):
+        groups.setdefault(group, []).append((sub, v))
+    for group, items in groups.items():
+        if len(items) == 1 and not items[0][0]:
+            v = items[0][1]
+            num = _number(v) if isinstance(v, str) else None
+            lines.append(f"  {_camel(group)}: {num if num is not None else json.dumps(str(v), ensure_ascii=False)},")
+            continue
+        lines.append(f"  {_camel(group)}: {{")
+        for sub, v in items:
+            num = _number(v) if isinstance(v, str) and not str(v).startswith("#") else None
+            lines.append(f"    {_camel(sub)}: {num if num is not None else json.dumps(str(v), ensure_ascii=False)},")
+        lines.append("  },")
+    lines += ["} as const;", "", "export type Tokens = typeof tokens;", ""]
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser(description="DESIGN.md → 設計 token")
-    ap.add_argument("target", choices=["dart", "css", "show"])
+    ap.add_argument("target", choices=["dart", "css", "ts", "show"])
     ap.add_argument("--design", default=str(ROOT / "DESIGN.md"))
+    ap.add_argument("--out", help="輸出路徑（相對專案根目錄）")
     args = ap.parse_args()
     if not Path(args.design).is_file():
         print("找不到 DESIGN.md，先走「設計方向」建立。")
@@ -171,9 +195,10 @@ def main():
         for group, sub, v in flatten(tokens):
             print(f"{group}{'.' + sub if sub else ''} = {v}")
         return 0
-    out = ROOT / ("app/lib/theme/tokens.dart" if args.target == "dart" else "web/shared/tokens.css")
+    default = {"dart": "app/lib/theme/tokens.dart", "css": "web/shared/tokens.css", "ts": "src/theme/tokens.ts"}[args.target]
+    out = (ROOT / args.out) if args.out else ROOT / default
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(to_dart(tokens) if args.target == "dart" else to_css(tokens), encoding="utf-8")
+    out.write_text({"dart": to_dart, "css": to_css, "ts": to_ts}[args.target](tokens), encoding="utf-8")
     print(f"已產生 {out.relative_to(ROOT)}（{sum(1 for _ in flatten(tokens))} 個 token）")
     return 0
 

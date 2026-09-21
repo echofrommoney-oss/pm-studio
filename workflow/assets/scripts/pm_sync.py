@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -129,7 +130,117 @@ def status(root, req):
             "marked_at": mark.get("at"), "has_design": bool(groups["design"])}
 
 
-MANIFEST_KEYS = ("tables", "functions", "rpc", "buckets", "app_screens", "web_admin", "web_partner", "web_site")
+MANIFEST_KEYS = ("tables", "functions", "rpc", "buckets", "endpoints", "app_screens")
+
+
+# ───────────── ARCHITECTURE.md：技術選型與開發服務 ─────────────
+
+def _strip_comment(line):
+    out, quote = "", None
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t"):
+            break
+        out += ch
+    return out.rstrip()
+
+
+def _yaml_scalar(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        return v[1:-1]
+    if v.startswith("[") and v.endswith("]"):
+        return [_yaml_scalar(x) for x in v[1:-1].split(",") if x.strip()]
+    if v in ("true", "false"):
+        return v == "true"
+    if re.fullmatch(r"-?\d+", v):
+        return int(v)
+    return v
+
+
+def parse_yaml_subset(text):
+    """夠用的 YAML 子集：巢狀對照、清單（含對照清單）、單行中括號清單、字串／整數／布林、# 註解。"""
+    rows = []
+    for raw in text.splitlines():
+        line = _strip_comment(raw)
+        if line.strip():
+            rows.append((len(line) - len(line.lstrip(" ")), line.strip()))
+
+    def block(i, indent):
+        if i >= len(rows):
+            return None, i
+        if rows[i][1].startswith("- ") or rows[i][1] == "-":
+            items = []
+            while i < len(rows) and rows[i][0] == indent and (rows[i][1].startswith("- ") or rows[i][1] == "-"):
+                content = rows[i][1][1:].strip()
+                if not content:
+                    val, i = block(i + 1, rows[i + 1][0]) if i + 1 < len(rows) and rows[i + 1][0] > indent else (None, i + 1)
+                    items.append(val)
+                elif re.match(r"^[\w.\-]+\s*:", content) and not content.startswith(("http:", "https:")):
+                    # 對照清單項目：把「- key: v」視為縮排在 indent+2 的對照
+                    sub = [(indent + 2, content)]
+                    j = i + 1
+                    while j < len(rows) and rows[j][0] > indent:
+                        sub.append(rows[j])
+                        j += 1
+                    saved = rows[:]
+                    rows[i:j] = sub
+                    val, _ = block(i, indent + 2)
+                    rows[i:i + len(sub)] = saved[i:j]
+                    items.append(val)
+                    i = j
+                else:
+                    items.append(_yaml_scalar(content))
+                    i += 1
+            return items, i
+        obj = {}
+        while i < len(rows) and rows[i][0] == indent:
+            key, sep, rest = rows[i][1].partition(":")
+            if not sep:
+                i += 1
+                continue
+            key, rest = key.strip(), rest.strip()
+            if rest:
+                obj[key] = _yaml_scalar(rest)
+                i += 1
+            elif i + 1 < len(rows) and rows[i + 1][0] > indent:
+                obj[key], i = block(i + 1, rows[i + 1][0])
+            elif i + 1 < len(rows) and rows[i + 1][0] == indent and rows[i + 1][1].startswith("- "):
+                obj[key], i = block(i + 1, indent)
+            else:
+                obj[key] = None
+                i += 1
+        return obj, i
+
+    val, _ = block(0, rows[0][0]) if rows else ({}, 0)
+    return val if isinstance(val, dict) else {}
+
+
+def _frontmatter(path):
+    try:
+        text = Path(path).read_text(encoding="utf-8").replace("\r", "")
+    except OSError:
+        return None
+    if not text.startswith("---"):
+        return None
+    end = text.find("\n---", 3)
+    return text[3:end] if end > 0 else None
+
+
+def read_stack(root):
+    """讀 ARCHITECTURE.md 開頭的 stack 與 services。沒有檔案或沒有設定回傳 None。"""
+    fm = _frontmatter(Path(root) / "ARCHITECTURE.md")
+    if fm is None:
+        return None
+    data = parse_yaml_subset(fm)
+    services = [s for s in (data.get("services") or []) if isinstance(s, dict) and s.get("id")]
+    if not data.get("stack") and not services:
+        return None
+    return {"stack": data.get("stack") or {}, "services": services}
 
 
 def read_manifest(root, req):
@@ -147,13 +258,21 @@ def read_manifest(root, req):
     out = {}
     for line in text[3:end].splitlines():
         key, sep, value = line.strip().partition(":")
-        if not sep or key not in MANIFEST_KEYS:
+        key = key.strip()
+        # 舊寫法 web_admin／web_partner／web_site → pages.admin …
+        if key.startswith("web_"):
+            key = "pages." + key[4:]
+        if not sep or not (key in MANIFEST_KEYS or re.fullmatch(r"pages\.[\w\-]+", key)):
             continue
         value = value.strip()
         if value.startswith("[") and value.endswith("]"):
             items = [v.strip().strip("'\"") for v in value[1:-1].split(",")]
             out[key] = [v for v in items if v]
-    return {k: out.get(k, []) for k in MANIFEST_KEYS} if out else None
+    if not out:
+        return None
+    for k in MANIFEST_KEYS:
+        out.setdefault(k, [])
+    return out
 
 
 def mark(root, req):
@@ -248,13 +367,19 @@ def uncommitted(root):
 
 
 def commit(root, req, message):
-    """只提交本需求資料夾、專案級文件（PRODUCT／DESIGN／ARCHITECTURE）與程式資料夾（supabase、app、web），不碰使用者其他檔案。"""
+    """只提交本需求資料夾、專案級文件（PRODUCT／DESIGN／ARCHITECTURE）與程式資料夾（ARCHITECTURE.md 列的服務資料夾，以及 supabase、app、web），不碰使用者其他檔案。"""
     root = Path(root)
     if not git_ready(root):
         print("這個專案還不是 git 儲存庫，略過提交（重新執行 install.py 會自動初始化）。")
         return 0
     # 存在的、或曾被追蹤過的（整個需求被刪除時也要記錄刪除）
-    paths = [p for p in (req, "PRODUCT.md", "DESIGN.md", "ARCHITECTURE.md", "supabase", "app", "web")
+    code_dirs = ["supabase", "app", "web"]
+    stack = read_stack(root) or {}
+    for svc in stack.get("services", []):
+        top = str(svc.get("dir") or "").strip("/").split("/")[0]
+        if top and not top.startswith(".") and top not in code_dirs:
+            code_dirs.append(top)
+    paths = [p for p in (req, "PRODUCT.md", "DESIGN.md", "ARCHITECTURE.md", *code_dirs)
              if p and ((root / p).exists() or git(root, "ls-files", "--", p).stdout.strip())]
     if not paths:
         print("沒有變動需要提交。")

@@ -49,10 +49,11 @@ Artifacts are organized **per requirement**: each requirement gets ONE top-level
 | Acceptance checklist, test checklist | `.agents/workflows/pm-acceptance.md` | `[需求名]/驗收清單/[需求名]-驗收清單.html` |
 | Metrics, BI-style analysis, report from data | `.agents/workflows/pm-data-analysis.md` | `[需求名]/資料分析/[需求名]-資料分析.html` |
 | Design direction, style, DESIGN.md, prototype review, motion, hi-fi | `.agents/workflows/pm-design.md` | `PRODUCT.md`, `DESIGN.md` (project root) |
-| System design, SA/SD, architecture, tech stack, data model overview | `.agents/workflows/pm-sysdesign.md` | `ARCHITECTURE.md` (project root) |
+| System design, SA/SD, architecture, **technology choice (always discussed with the user first, never assumed)** | `.agents/workflows/pm-sysdesign.md` | `ARCHITECTURE.md` (project root, with `stack` and `services` frontmatter) |
 | Engineering handoff, tech spec, 技術規格 | `.agents/workflows/pm-spec.md` | `[需求名]/技術規格/[需求名]-spec.md` (with `manifest` frontmatter) |
-| Backend development on local Supabase: tables, RLS, storage, functions, cron, seed | `.agents/workflows/pm-backend.md` | `supabase/` |
-| Flutter APP development: screens from prototype, tokens from DESIGN.md, local Supabase | `.agents/workflows/pm-app.md` | `app/` |
+| Backend development with the stack chosen in ARCHITECTURE.md (Supabase has a dedicated section) | `.agents/workflows/pm-backend.md` | backend service dir |
+| APP development with the stack chosen in ARCHITECTURE.md (Flutter has a dedicated section) | `.agents/workflows/pm-app.md` | app service dir |
+| Web frontend development (admin, partner portal, marketing site…) with the chosen stack | `.agents/workflows/pm-frontend.md` | web service dirs |
 | Any change to an existing requirement, "同步", out-of-date documents | `.agents/workflows/pm-change.md` | every affected document rewritten to the latest consistent version |
 | Usability test, prototype validation, test notes to synthesize | `.agents/workflows/pm-validate.md` | `[需求名]/原型驗證/[需求名]-測試腳本.md`, `-驗證結果.md` |
 | Release notes, launch checklist, landing page, store listing, pricing | `.agents/workflows/pm-launch.md` | `[需求名]/上線/` |
@@ -118,7 +119,7 @@ Per-requirement folders at the project root; shared tooling stays at root.
   素材/                      raw inputs supplied by the user (not deliverables)
 
 PRODUCT.md  DESIGN.md  ARCHITECTURE.md   [shared] product facts · design system · system design
-supabase/  app/  web/      [shared] code (backend · Flutter app · Next.js sites)
+<service dirs>            [shared] code, locations defined by ARCHITECTURE.md services
 
 scripts/                  [shared] prototype export service
 啟動原型匯出服務.command     [shared] macOS — optional manual start; normally the service

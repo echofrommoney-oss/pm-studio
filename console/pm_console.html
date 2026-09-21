@@ -159,6 +159,8 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
 .phone-wrap{flex:1;min-height:0;background:#eceaf2;overflow:hidden;position:relative}
 .phone{position:absolute;left:50%;top:50%;transform-origin:center center;border:12px solid #1d1b2b;border-radius:44px;background:#fff;box-shadow:0 18px 50px rgba(20,18,40,.25);overflow:hidden}
 .phone iframe{border:0;width:100%;height:100%;display:block;background:#fff}
+.desk{position:absolute;left:50%;top:50%;transform-origin:center center;border:1px solid var(--line-strong);border-radius:8px;background:#fff;box-shadow:0 10px 30px rgba(20,18,40,.15);overflow:hidden}
+.desk iframe{border:0;width:100%;height:100%;display:block;background:#fff}
 .shot-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#eceaf2;padding:16px}
 .shot-wrap img{max-height:100%;max-width:100%;border-radius:22px;box-shadow:0 18px 50px rgba(20,18,40,.25);background:#000}
 .banner{padding:9px 20px;background:#fbeeee;color:var(--bad);font-size:13px;border-bottom:1px solid #f0d3d4}
@@ -217,8 +219,12 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
   <section class="preview" aria-label="成品預覽" style="display:flex;flex-direction:column;min-height:0">
     <div class="pv-tabs" role="tablist">
       <button role="tab" data-tab="docs" aria-selected="true">文件</button>
-      <button role="tab" data-tab="app" aria-selected="false">APP</button>
-      <button role="tab" data-tab="backend" aria-selected="false">後端</button>
+      <button role="tab" data-tab="app" aria-selected="false" hidden>APP</button>
+      <button role="tab" data-tab="svc-app" aria-selected="false" hidden>APP</button>
+      <button role="tab" data-tab="svc-web" aria-selected="false" hidden>前端</button>
+      <button role="tab" data-tab="backend" aria-selected="false" hidden>後端</button>
+      <button role="tab" data-tab="svc-backend" aria-selected="false" hidden>後端</button>
+      <button role="tab" data-tab="setup" aria-selected="false" hidden>開發</button>
     </div>
     <div class="tabpane" id="tab-docs">
     <div class="pv-head">
@@ -252,6 +258,16 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
         </nav>
         <div class="be-view" id="app-view"></div>
       </div>
+    </div>
+    <div class="tabpane" id="tab-svc-app" hidden></div>
+    <div class="tabpane" id="tab-svc-web" hidden></div>
+    <div class="tabpane" id="tab-svc-backend" hidden></div>
+    <div class="tabpane" id="tab-setup" hidden>
+      <div class="be-pad"><div class="be-card">
+        <strong>先決定這個產品用什麼技術</strong>
+        <p>選「系統」→「系統設計」。Claude 會依產品需求提出 APP、前端、後端的技術選項和取捨，跟你討論後再寫進 <code>ARCHITECTURE.md</code>。</p>
+        <p>選定之後，這裡會依你的選擇出現 APP、前端、後端分頁：Supabase、Flutter、Next.js 有專屬面板；其他技術也能在這裡啟動、預覽、看日誌、測 API。</p>
+      </div></div>
     </div>
     <div class="tabpane" id="tab-backend" hidden>
       <div class="be-top">
@@ -412,6 +428,7 @@ async function loadReq(name, keepSelection){
   $('#btn-reset').hidden = !S.reqData.has_session;
   renderLog(); renderArtifacts(keepSelection); renderSync(); updateComposer();
   if (typeof TAB !== 'undefined' && TAB === 'backend' && BE.view === 'progress') renderProgress();
+  if (typeof TAB !== 'undefined' && TAB.startsWith('svc-') && svcState(TAB.slice(4)).view === 'progress') svcProgress(TAB.slice(4));
 }
 function renderSync(){
   const el = $('#pv-sync'); const st = S.reqData?.stale || [];
@@ -575,15 +592,17 @@ let TAB = 'docs';
 function switchTab(tab){
   TAB = tab;
   document.querySelectorAll('.pv-tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
-  $('#tab-docs').hidden = tab !== 'docs'; $('#tab-backend').hidden = tab !== 'backend'; $('#tab-app').hidden = tab !== 'app';
+  document.querySelectorAll('.tabpane').forEach(p => p.hidden = p.id !== 'tab-' + tab);
   if (tab === 'backend') beRefresh(true);
   if (tab === 'app') appRefresh(true, true);
+  if (tab.startsWith('svc-')) loadStack().then(() => renderSvc(tab.slice(4)));
 }
 document.querySelectorAll('.pv-tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 
 /* ── 後端 ── */
 const BE = {view: 'progress', st: null, logFrom: {supabase: 0, api: 0}, logs: [], catalog: null, apiOut: null, fnOut: {}};
 async function beRefresh(render){
+  if (STACK && !(STACK.services || []).some(x => x.adapter === 'supabase')) return;
   try{ BE.st = await api('/api/dev/state'); }catch(e){ return; }
   renderSbPill();
   if (TAB === 'backend' && render) renderBackend();
@@ -672,8 +691,8 @@ async function renderProgress(){
   v.innerHTML = '<div class="be-pad">讀取中…</div>';
   let p; try{ p = await api('/api/dev/progress?req=' + encodeURIComponent(S.req)); }catch(e){ v.innerHTML = `<div class="be-pad">${esc(e.message)}</div>`; return; }
   if (!p.manifest){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>這個需求還沒有技術規格清單</strong><p>選「系統」→「技術規格」產出技術規格，開頭的 manifest 會列出要建的資料表、函式、畫面，這裡就能對照進度。</p></div></div>`; return; }
-  const label = {done: '✓ 已建立', todo: '✗ 尚未建立', later: '之後的階段', unknown: '啟動後才能確認'};
-  const back = p.items.filter(i => i.state !== 'later' && i.kind !== 'app_screens'), later = p.items.filter(i => i.state === 'later');
+  const label = {done: '✓ 已建立', todo: '✗ 尚未建立', later: '之後的階段', unknown: '啟動後才能確認', manual: '需手動確認'};
+  const back = p.items.filter(i => ['tables', 'rpc', 'buckets', 'functions'].includes(i.kind)), later = [];
   const done = back.filter(i => i.state === 'done').length;
   v.innerHTML = `<div class="be-pad">
     ${!p.running ? setupCard().replace('<div class="be-pad">', '<div style="margin-bottom:16px">') : ''}
@@ -947,6 +966,149 @@ setInterval(async () => {
   else if (JSON.stringify(AP.st?.runs || {}) !== before && AP.view !== 'device') renderApp();
 }, 3000);
 
+
+/* ── 開發服務（技術中立）：依 ARCHITECTURE.md 決定要出現哪些分頁 ── */
+let STACK = null;
+const SV = {};   // role -> {sid, view, size, path, logFrom, logs, apiOut}
+const VIEWPORTS = {desktop: ['桌機', 1440, 900], tablet: ['平板', 834, 1112], mobile: ['手機', 390, 844]};
+async function loadStack(){
+  try{ STACK = await api('/api/stack'); }catch(e){ return; }
+  const svcs = STACK.services || [];
+  const has = (pred) => svcs.some(pred);
+  const show = (tab, on, label) => { const b = document.querySelector(`.pv-tabs button[data-tab="${tab}"]`); if (b){ b.hidden = !on; if (label) b.dataset.label = label; } };
+  const supa = has(s => s.adapter === 'supabase'), flutter = has(s => s.adapter === 'flutter');
+  const genApp = has(s => s.role === 'app' && s.adapter !== 'flutter');
+  const genBack = has(s => s.role === 'backend' && s.adapter !== 'supabase');
+  show('app', flutter); show('backend', supa);
+  show('svc-app', genApp); show('svc-web', has(s => s.role === 'web')); show('svc-backend', genBack);
+  const bb = document.querySelector('.pv-tabs button[data-tab="svc-backend"]'); if (bb) bb.textContent = supa ? 'API 服務' : '後端';
+  show('setup', !svcs.length);
+  $('#st-sb').hidden = !supa;
+  if (TAB !== 'docs' && document.querySelector(`.pv-tabs button[data-tab="${TAB}"]`)?.hidden) switchTab('docs');
+}
+function svcList(role){ return (STACK?.services || []).filter(s => s.role === role && !['supabase', 'flutter'].includes(s.adapter)); }
+function svcState(role){
+  const S0 = SV[role] || (SV[role] = {sid: '', view: 'preview', size: role === 'web' ? 'desktop' : 'mobile', path: '/', logFrom: 0, logs: [], apiOut: null});
+  const list = svcList(role);
+  if (!list.some(s => s.id === S0.sid)) S0.sid = list[0]?.id || '';
+  return S0;
+}
+function curSvc(role){ const st = svcState(role); return svcList(role).find(s => s.id === st.sid); }
+function renderSvc(role){
+  const pane = $('#tab-svc-' + role); if (!pane) return;
+  const st = svcState(role), list = svcList(role), svc = curSvc(role);
+  const live = svc?.run && (svc.run.state === 'starting' || svc.run.state === 'running');
+  const views = [['preview', '預覽'], ['progress', '建置進度'], ...(role === 'backend' ? [['api', 'API 測試']] : []), ['logs', '日誌']];
+  if (role === 'backend' && st.view === 'preview' && !svc?.url) st.view = 'api';
+  pane.innerHTML = `<div class="be-top">
+      ${list.length > 1 ? `<select id="svc-sel-${role}" aria-label="服務">${list.map(s => `<option value="${esc(s.id)}" ${s.id === st.sid ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select>` : `<strong>${esc(svc?.label || '')}</strong>`}
+      <span style="color:var(--faint);font-size:12px">${esc(svc?.adapter || '')}${svc?.support === 'deep' ? '・專屬支援' : '・通用支援'}</span>
+      <button class="btn" id="svc-btn-${role}">${live ? (svc.run.state === 'starting' ? '啟動中…（按一下停止）' : '停止') : '啟動'}</button>
+      <span class="spacer"></span>
+      ${svc?.url ? `<a class="linkbtn" href="${esc(svc.url)}" target="_blank" rel="noopener">新分頁開啟</a>` : ''}
+    </div>
+    <div class="be-main"><nav class="be-nav" aria-label="功能">${views.map(([k, l]) => `<button data-v="${k}" aria-current="${k === st.view}">${l}</button>`).join('')}</nav>
+    <div class="be-view" id="svc-view-${role}"></div></div>`;
+  const sel = $('#svc-sel-' + role); if (sel) sel.onchange = e => { st.sid = e.target.value; st.logFrom = 0; st.logs = []; st.apiOut = null; renderSvc(role); };
+  $('#svc-btn-' + role).onclick = async () => {
+    try{
+      if (live) await api('/api/svc/stop', {id: svc.id});
+      else { await api('/api/svc/start', {id: svc.id}); st.view = svc.url && role !== 'backend' ? 'preview' : 'logs'; }
+      await loadStack(); renderSvc(role);
+    }catch(e){ alert(e.message); }
+  };
+  pane.querySelectorAll('.be-nav button').forEach(b => b.onclick = () => { st.view = b.dataset.v; renderSvc(role); });
+  const v = $('#svc-view-' + role);
+  if (!svc){ v.innerHTML = '<div class="be-pad">沒有服務。</div>'; return; }
+  if (!svc.exists){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>還沒有「${esc(svc.label)}」的程式</strong><p>選「開發」→「${esc(ROLE_NAME[role])}」，Claude 會依 ARCHITECTURE.md 的選型在 <code>${esc(svc.dir || '/')}</code> 建立專案。</p></div></div>`; return; }
+  if (!svc.can_run && st.view !== 'progress'){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>還不知道怎麼啟動「${esc(svc.label)}」</strong><p>ARCHITECTURE.md 的 services 要寫這個服務的 <code>run</code>（啟動指令，用 <code>{port}</code> 代表連接埠）與 <code>url</code>。選「系統」→「系統設計」請 Claude 補上。</p></div></div>`; return; }
+  if (st.view === 'logs') return svcLogs(role, true);
+  if (st.view === 'progress') return svcProgress(role);
+  if (st.view === 'api') return svcApi(role);
+  if (!live){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>${esc(svc.label)}還沒啟動</strong><p>按上方「啟動」。第一次會先安裝套件，進度在「日誌」。改程式後大多數框架會自動更新畫面，沒有的話按下方「重新整理」。</p></div></div>`; return; }
+  if (svc.run.state === 'starting'){ v.innerHTML = '<div class="be-pad">啟動中…進度在「日誌」。</div>'; return; }
+  const [, w, h] = VIEWPORTS[st.size];
+  v.className = 'be-view frame';
+  v.innerHTML = `<div class="be-bar">
+      <select id="svc-size-${role}" aria-label="尺寸">${Object.entries(VIEWPORTS).map(([k, x]) => `<option value="${k}" ${k === st.size ? 'selected' : ''}>${x[0]}（${x[1]}×${x[2]}）</option>`).join('')}</select>
+      <input id="svc-path-${role}" value="${esc(st.path)}" aria-label="網址路徑" style="flex:1;min-width:120px;border:1px solid var(--line-strong);border-radius:7px;padding:3px 8px">
+      <button class="btn" id="svc-go-${role}">前往</button><button class="btn" id="svc-reload-${role}">重新整理</button></div>
+    <div class="phone-wrap" id="svc-wrap-${role}"><div class="${st.size === 'desktop' ? 'desk' : 'phone'}" id="svc-frame-${role}" style="width:${w}px;height:${h}px"><iframe src="${esc(svc.url.replace(/\/$/, '') + st.path)}" title="${esc(svc.label)}預覽"></iframe></div></div>`;
+  const go = () => { st.path = '/' + ($('#svc-path-' + role).value || '').replace(/^\/+/, ''); renderSvc(role); };
+  $('#svc-go-' + role).onclick = go;
+  $('#svc-path-' + role).onkeydown = e => { if (e.key === 'Enter') go(); };
+  $('#svc-reload-' + role).onclick = () => { const f = pane.querySelector('iframe'); f.src = f.src; };
+  $('#svc-size-' + role).onchange = e => { st.size = e.target.value; renderSvc(role); };
+  fitSvc(role);
+}
+const ROLE_NAME = {app: 'APP', web: '前端', backend: '後端'};
+function fitSvc(role){
+  const wrap = $('#svc-wrap-' + role), fr = $('#svc-frame-' + role); if (!wrap || !fr) return;
+  const [, w, h] = VIEWPORTS[svcState(role).size];
+  const pad = fr.classList.contains('phone') ? 24 : 2;
+  const k = Math.min(1, (wrap.clientHeight - 24) / (h + pad), (wrap.clientWidth - 24) / (w + pad));
+  fr.style.transform = `translate(-50%, -50%) scale(${k})`;
+}
+window.addEventListener('resize', () => { ['web', 'app', 'backend'].forEach(r => { if (TAB === 'svc-' + r) fitSvc(r); }); });
+async function svcLogs(role, reset){
+  const st = svcState(role), svc = curSvc(role), v = $('#svc-view-' + role); if (!svc || !v) return;
+  if (reset){ st.logs = []; st.logFrom = 0; v.className = 'be-view'; v.innerHTML = `<div class="be-bar">${esc(svc.label)}的安裝與執行輸出<span style="flex:1"></span></div><pre class="be-log" id="svc-log-${role}"></pre>`; }
+  try{ const r = await api(`/api/dev/logs?service=svc-${encodeURIComponent(svc.id)}&from=${st.logFrom}`); st.logFrom = r.total; st.logs.push(...r.items); }catch(e){}
+  const el = $('#svc-log-' + role); if (!el) return;
+  const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 60;
+  el.textContent = st.logs.map(x => `${new Date(x.t * 1000).toLocaleTimeString('zh-TW', {hour12: false})}  ${x.text}`).join('\n') || '（還沒有紀錄）';
+  if (atBottom || reset) v.scrollTop = v.scrollHeight;
+}
+async function svcProgress(role){
+  const v = $('#svc-view-' + role), svc = curSvc(role); v.className = 'be-view';
+  if (!S.req){ v.innerHTML = '<div class="be-pad">先在左邊選一個需求。</div>'; return; }
+  let p; try{ p = await api('/api/progress?req=' + encodeURIComponent(S.req)); }catch(e){ v.innerHTML = `<div class="be-pad">${esc(e.message)}</div>`; return; }
+  if (!p.manifest){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>這個需求還沒有技術規格清單</strong><p>選「系統」→「技術規格」產出，開頭的 manifest 會列出要做的頁面、畫面與 API。</p></div></div>`; return; }
+  const supa = (STACK?.services || []).some(x => x.adapter === 'supabase');
+  const items = p.items.filter(i => i.role === role && (role !== 'web' || i.kind === 'pages.' + svc?.id)
+    && (role !== 'backend' || !supa || i.kind === 'endpoints'));
+  const lab = {done: '✓ 已完成', todo: '✗ 尚未完成', unknown: '無法判斷', manual: '需手動確認'};
+  const hint = {web: svc?.adapter === 'nextjs' ? '判斷方式：Next.js 的 app／pages 資料夾結構，或程式裡的 <code>pm-page: /路由</code> 標記。' : '判斷方式：程式裡的 <code>pm-page: /路由</code> 註解標記。',
+    app: '判斷方式：畫面檔裡的 <code>pm-screen: 代號</code> 註解標記。', backend: '判斷方式：程式裡的 <code>pm-endpoint: GET /路徑</code> 註解標記，或服務啟動時的 OpenAPI 文件。'}[role];
+  v.innerHTML = `<div class="be-pad"><h3>「${esc(S.req)}」${esc(svc?.label || '')} ${items.filter(i => i.state === 'done').length} / ${items.length}</h3>
+    ${items.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th><th>位置</th></tr></thead><tbody>${items.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state === 'manual' ? 'unknown' : i.state}">${lab[i.state] || i.state}</td><td>${esc(i.where || '')}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列這個服務的項目。</p>'}
+    <p style="color:var(--muted);font-size:12.5px;margin-top:10px">${hint}</p></div>`;
+}
+async function svcApi(role){
+  const st = svcState(role), svc = curSvc(role), v = $('#svc-view-' + role); v.className = 'be-view';
+  if (!svc.url){ v.innerHTML = '<div class="be-pad">ARCHITECTURE.md 沒寫這個服務的網址（url），無法測試。</div>'; return; }
+  let sug = []; try{ sug = (await api('/api/svc/openapi?id=' + encodeURIComponent(svc.id))).paths; }catch(e){}
+  const a = st.apiOut || {method: 'GET', path: '/', body: '', headers: ''};
+  v.innerHTML = `<div class="be-pad">
+    <div class="be-form">
+      <select id="sapi-m" aria-label="方法">${['GET','POST','PATCH','PUT','DELETE'].map(m => `<option ${m === a.method ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <input id="sapi-p" list="sapi-sug" value="${esc(a.path)}" style="flex:1;min-width:240px" aria-label="路徑">
+      <datalist id="sapi-sug">${sug.map(x => `<option value="${esc(x.split(' ')[1])}">${esc(x)}</option>`).join('')}</datalist>
+      <button class="btn primary" id="sapi-send">送出</button>
+    </div>
+    <textarea id="sapi-h" placeholder='標頭（JSON），例如 {"Authorization":"Bearer ..."}' aria-label="標頭" style="min-height:44px">${esc(a.headers)}</textarea>
+    <textarea id="sapi-b" placeholder="內容（JSON）" aria-label="內容" style="margin-top:6px">${esc(a.body)}</textarea>
+    <p style="color:var(--muted);font-size:12.5px;margin:6px 0 0">送到 ${esc(svc.url)}。${sug.length ? `從 OpenAPI 讀到 ${sug.length} 個端點，路徑欄可以下拉選。` : svc.openapi ? '服務啟動後會從 OpenAPI 讀取端點清單。' : 'ARCHITECTURE.md 若寫了 openapi 路徑，這裡會列出端點。'}</p>
+    ${a.res ? resultHtml(a.res) : ''}</div>`;
+  $('#sapi-send').onclick = async () => {
+    const out = {method: $('#sapi-m').value, path: $('#sapi-p').value.trim(), body: $('#sapi-b').value, headers: $('#sapi-h').value};
+    let headers = {}; try{ headers = out.headers.trim() ? JSON.parse(out.headers) : {}; }catch(e){ alert('標頭不是有效的 JSON'); return; }
+    try{ out.res = await api('/api/svc/request', {id: svc.id, method: out.method, path: out.path, body: out.body, headers}); }catch(e){ out.res = {error: e.message}; }
+    st.apiOut = out; svcApi(role);
+  };
+}
+setInterval(async () => {
+  const role = (TAB.startsWith('svc-') ? TAB.slice(4) : '');
+  const anyLive = (STACK?.services || []).some(s => s.run && (s.run.state === 'starting' || s.run.state === 'running'));
+  if (!role && !anyLive) return;
+  const before = JSON.stringify((STACK?.services || []).map(s => s.run));
+  await loadStack();
+  if (!role) return;
+  const st = svcState(role);
+  if (st.view === 'logs') svcLogs(role, false);
+  else if (JSON.stringify((STACK?.services || []).map(s => s.run)) !== before && st.view === 'preview') renderSvc(role);
+}, 3000);
+
 /* ── 啟動 ── */
 (async () => {
   await refreshState();
@@ -954,8 +1116,9 @@ setInterval(async () => {
   const reqs = S.state?.reqs || [];
   const pick = S.state?.run && !S.state.run.done ? S.state.run.req : (reqs.find(r => r.name === saved) ? saved : reqs[0]?.name);
   if (pick) selectReq(pick);
+  await loadStack();
   beRefresh(false);
-  appRefresh(false, true);
+  if ((STACK?.services || []).some(s => s.adapter === 'flutter')) appRefresh(false, true);
   setInterval(() => { if (!S.live) refreshState(); }, 8000);
 })();
 </script>

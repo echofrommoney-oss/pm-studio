@@ -1,31 +1,50 @@
 ---
-description: APP 開發工作流：依原型、DESIGN.md 與技術規格，在 app/ 實作 Flutter APP，接上本機 Supabase
+description: APP 開發工作流：依 ARCHITECTURE.md 選定的 APP 技術，依原型、DESIGN.md 與技術規格實作，接上本機後端
 ---
 
-# APP 開發工作流（Flutter）
+# APP 開發工作流
 
-> 依原型（畫面長相與流程）、`DESIGN.md`（視覺）、技術規格（資料與介面）實作 Flutter APP。
-> 使用者在工作台右欄「APP」分頁看網頁版預覽與模擬器畫面，用熱重載即時看修改結果。
+> APP 用什麼技術，由 `ARCHITECTURE.md` 的 `stack.app` 與 `services`（role: app）決定，本檔不預設。
+> 下半部是 **APP 為 Flutter 時**的專屬做法；其他技術（React Native／Expo、原生 Swift／Kotlin…）照「通用規則」。
 
-## 觸發方式
+## 通用規則（任何 APP 技術）
 
-- 使用者說「APP」「Flutter」「做畫面」「手機版」
-- 工作台按「開發 → APP」
+### 前置
 
-## 前置
+1. `ARCHITECTURE.md` 要有 role 為 app 的服務。沒有或沒有 stack → 先走 `pm-sysdesign.md` 和使用者討論選型，**不可自行選技術**。
+2. 讀 `ARCHITECTURE.md` 第 6 節、`DESIGN.md`、本需求的原型與技術規格（`manifest.app_screens`）。缺技術規格 → 先走 `pm-spec.md`。
+3. 後端最好已建好；還沒建也可以先做畫面，資料用假資料頂著，並在回覆中說明。
 
-1. `ARCHITECTURE.md` 第 6 節（APP 慣例）、`DESIGN.md`、本需求的原型與技術規格（`manifest.app_screens`）。缺技術規格 → 先走 `pm-spec.md`。
-2. 後端：APP 要用到的資料表與函式最好已由 `pm-backend.md` 建好（右欄「後端 → 建置進度」）。還沒建也可以先做畫面，資料用假資料頂著，但要在回覆中說明。
-3. `flutter --version` 確認可用。
+### 絕對不做
 
-## 絕對不做
+- **不啟動 APP、開發伺服器或模擬器**（工作台負責，啟動指令已封鎖）。
+- 不把後端網址或金鑰寫死；從環境設定讀（工作台啟動時會帶入 `SUPABASE_URL`、`SUPABASE_ANON_KEY`、`BACKEND_URL`／`API_URL`，Android 模擬器上已自動換成 `10.0.2.2`）。
+- 不手寫色碼、字型、圓角；用 `scripts/pm_tokens.py` 由 `DESIGN.md` 產生（Flutter 用 `dart`，React Native 用 `ts`）。
+- 不打包正式版、不處理簽章與上架（上線階段才做）。
 
-- **不執行 `flutter run`、不啟動模擬器**（工作台已封鎖）：執行由工作台負責，使用者在右欄按啟動、熱重載。
-- 不把 Supabase 網址或金鑰寫死在程式裡；一律從 `--dart-define` 讀（見下方「接後端」）。
-- 不手寫色碼、字型、圓角；一律用 `AppTokens`（見下方「設計 token」）。
-- 不 `flutter build` 正式版、不處理簽章與上架（上線階段才做）。
+### 畫面
 
-## 專案骨架（第一次）
+1. 依 `manifest.app_screens` 逐一實作，每個畫面對應原型的 `#page-id`；文案照 PRD 與原型。
+2. **每個畫面檔加註解標記**，工作台用它顯示建置進度（任何語言都可以，放在註解裡）：
+   ```
+   // pm-screen: vaccination-list
+   ```
+3. 插畫未到位的地方用和原型相同的佔位；狀態齊全（載入中、空、錯誤、無網路）；可點區域夠大、支援系統字級。
+4. 原生功能（推播、相機、定位、地圖）要在模擬器或實機確認，網頁預覽不準。
+
+### 完成
+
+1. 請使用者在右欄「APP」啟動，列出建議走一遍的流程與測試帳號。
+2. 實作和原型或 Spec 有出入 → 不自己改文件，請使用者決定後走「變更」。
+3. `python3 scripts/pm_sync.py commit 需求名 -m "[需求名] APP：一句話摘要"`。
+
+---
+
+## APP 為 Flutter 時
+
+> 右欄「APP」分頁有專屬面板：手機外框的網頁預覽、模擬器啟動與畫面、熱重載、DevTools、建置進度。程式資料夾以 `ARCHITECTURE.md` 的 `dir` 為準（下文以 `app/` 舉例）。
+
+### 專案骨架（第一次）
 
 `app/` 還不存在時：
 
@@ -35,7 +54,7 @@ flutter create --org com.<工作室或產品英文> --project-name <產品英文
 
 `--project-name` 只能用英文小寫與底線（例如 `huru`）。建好之後：
 
-- 套件（依 `ARCHITECTURE.md`；沒指定就用這組）：`flutter pub add supabase_flutter go_router flutter_riverpod`
+- 套件依 `ARCHITECTURE.md` 第 6 節（狀態管理、路由）與後端選型；後端是 Supabase 時加 `supabase_flutter`。沒寫的先問使用者，不自行決定。
 - 目錄：
   ```
   app/lib/
@@ -51,19 +70,19 @@ flutter create --org com.<工作室或產品英文> --project-name <產品英文
 - **Android 本機連線**：`android/app/src/debug/AndroidManifest.xml` 的 `<application>` 加 `android:usesCleartextTraffic="true"`（只在 debug，讓模擬器能連本機的 http 後端）。
 - **iOS 本機連線**：`ios/Runner/Info.plist` 加 `NSAppTransportSecurity` → `NSAllowsLocalNetworking` = true。
 
-## 設計 token
+### 設計 token
 
 ```bash
-python3 scripts/pm_tokens.py dart
+python3 scripts/pm_tokens.py dart --out app/lib/theme/tokens.dart
 ```
 
 產生 `app/lib/theme/tokens.dart`（`AppTokens.colorsPrimary`、`AppTokens.radiusSm`…）。`app_theme.dart` 用它組 `ThemeData`（`ColorScheme`、`TextTheme`、元件圓角）。`DESIGN.md` 改了就重跑，不要手改 tokens.dart。
 
 中文字型：`DESIGN.md` 指定的西文字型搭配 `PingFang TC`（iOS）／`Noto Sans TC`（Android）fallback。需要 Google Fonts 就用 `google_fonts` 套件。
 
-## 接後端
+### 接後端
 
-工作台啟動 APP 時會帶 `--dart-define-from-file`，內含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`、`APP_ENV`（Android 模擬器的網址已自動換成 `10.0.2.2`）。`app_config.dart`：
+工作台啟動 APP 時會帶 `--dart-define-from-file`，內含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`、`BACKEND_URL`、`API_URL`、`APP_ENV`（Android 模擬器的網址已自動換成 `10.0.2.2`）。後端不是 Supabase 時用 `BACKEND_URL`。`app_config.dart`：
 
 ```dart
 class AppConfig {
@@ -77,7 +96,7 @@ class AppConfig {
 
 資料表名、欄位名、權限行為照技術規格；RLS 會擋的操作要處理錯誤並顯示友善訊息。
 
-## 畫面
+### 畫面
 
 1. 依 `manifest.app_screens` 逐一實作，每個畫面對應原型的 `#page-id`。
 2. **每個畫面檔的第一行寫標記**，工作台用它顯示建置進度：
@@ -90,7 +109,7 @@ class AppConfig {
 5. 狀態齊全：載入中、空狀態、錯誤、無網路。空狀態與錯誤的文案照 PRD【邊界說明】。
 6. 無障礙：可點區域至少 48×48、圖示按鈕加 `Semantics`／`tooltip`、支援系統字級放大。
 
-## 檢查
+### 檢查
 
 ```bash
 flutter analyze
@@ -99,7 +118,7 @@ flutter test
 
 `analyze` 要乾淨。至少為資料轉換與關鍵元件寫 widget test（完整的自動測試在 QA 階段）。
 
-## 完成
+### 完成
 
 1. 請使用者在右欄「APP」按「網頁預覽」或選模擬器啟動，列出建議他走一遍的流程，並附上可登入的測試帳號（「後端 → 帳號」建立的）。
 2. 原生功能（推播、相機、定位、地圖）在網頁預覽不準，明講要用模擬器確認哪些。

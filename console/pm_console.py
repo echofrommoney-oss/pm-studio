@@ -36,8 +36,10 @@ UI_FILE = SCRIPTS / "pm_console.html"
 sys.path.insert(0, str(SCRIPTS))
 import pm_dev  # noqa: E402  與工作台同在 scripts/
 import pm_app  # noqa: E402
+import pm_services  # noqa: E402
 pm_dev.init(ROOT, DATA)
 pm_app.init(ROOT, DATA)
+pm_services.init(ROOT, DATA)
 
 # 產物子資料夾名稱，須與 studio-pm-workflow匯出服務的 WRITABLE_SUBDIR_NAMES 一致。
 ARTIFACT_DIRS = ["需求挖掘", "需求文件", "原型", "流程圖", "原型驗證", "技術規格", "驗收清單", "資料分析", "上線",
@@ -92,6 +94,7 @@ DEFAULT_CONFIG = {
         {"id": "spec", "group": "系統", "label": "技術規格", "file": ".agents/workflows/pm-spec.md"},
         {"id": "backend", "group": "開發", "label": "後端", "file": ".agents/workflows/pm-backend.md"},
         {"id": "app", "group": "開發", "label": "APP", "file": ".agents/workflows/pm-app.md"},
+        {"id": "frontend", "group": "開發", "label": "前端", "file": ".agents/workflows/pm-frontend.md"},
         {"id": "acceptance", "group": "QA", "label": "驗收清單", "file": ".agents/workflows/pm-acceptance.md"},
         {"id": "change", "group": "調整", "label": "變更", "file": ".agents/workflows/pm-change.md"},
         {"id": "free", "group": "調整", "label": "自由指令", "file": ""},
@@ -389,26 +392,46 @@ def compose_prompt(cfg, req, workflow, message, first_turn):
         lines.append(f"- 本輪工作流：{workflow['label']}。請依照 `{workflow['file']}` 的規範執行"
                      + ("（開始前先完整閱讀它）。" if first_turn else "（若本對話已讀過可不必重讀）。"))
     if workflow.get("group") in ("開發", "系統"):
-        st = pm_dev.public_status() if (ROOT / "supabase/config.toml").is_file() else {"running": False}
-        lines.append("- 開發環境：本機 Supabase " + (f"執行中（API {st.get('api')}，管理介面 {st.get('studio')}）" if st.get("running")
-                     else "沒有在執行。需要它時不要自己啟動，請使用者按工作台上方的「Supabase」。")
-                     + "只准操作本機，禁止連到任何遠端專案。本輪開始前工作台已做 git 快照，使用者可以一鍵退回。")
-        runs = pm_app.state()["runs"]
-        live = [f"{r['label']}（{r['state']}）" for r in runs.values() if r["state"] in ("starting", "running")]
-        lines.append("- APP：" + ("執行中：" + "、".join(live) + "。改完 Dart 程式後請使用者按右欄「APP」的熱重載或重新啟動。" if live
-                     else "沒有在執行。") + "不要執行 flutter run 或啟動模擬器，這些由工作台負責。")
+        try:
+            st = pm_services.state(project_id())
+        except Exception:
+            st = {"services": [], "declared": False}
+        if not st["declared"]:
+            lines.append("- 技術選型：ARCHITECTURE.md 還沒有 stack／services 設定。開發前必須先走 pm-sysdesign.md 和使用者討論選型，不可自行假設技術。")
+        parts = []
+        for svc in st["services"]:
+            if svc["adapter"] == "supabase":
+                sb = pm_dev.public_status() if (ROOT / "supabase/config.toml").is_file() else {"running": False}
+                parts.append(f"{svc['label']}（Supabase，{'執行中，API ' + str(sb.get('api')) if sb.get('running') else '未啟動'}）")
+            elif svc["adapter"] == "flutter":
+                live = [r["label"] for r in pm_app.state()["runs"].values() if r["state"] in ("starting", "running")]
+                parts.append(f"{svc['label']}（Flutter，{'執行中：' + '、'.join(live) if live else '未啟動'}）")
+            else:
+                run = svc.get("run") or {}
+                parts.append(f"{svc['label']}（{svc['adapter']}，{svc['dir'] or '根目錄'}，{'執行中 ' + svc['url'] if run.get('state') == 'running' else '未啟動'}）")
+        if parts:
+            lines.append("- 開發服務：" + "；".join(parts) + "。")
+        lines.append("- 開發伺服器、模擬器、本機後端一律由工作台啟動與停止，你不要自己執行它們；需要時請使用者在右欄按啟動。"
+                     "只准操作本機，禁止連到任何遠端或正式環境。本輪開始前工作台已做 git 快照，使用者可以一鍵退回。")
     if workflow.get("instruction"):
         lines.append(f"- 補充指示：{workflow['instruction']}")
     lines += ["", "［使用者訊息］", message.strip()]
     return "\n".join(lines)
 
 
+def _svc_rules():
+    try:
+        return pm_services.permission_rules(project_id())
+    except Exception:
+        return [], []
+
+
 def build_command(cfg, exe, session_id):
     settings = DATA / "claude-settings.json"
     atomic_write(settings, json.dumps({
         "disableAllHooks": bool(cfg.get("disable_hooks", True)),
-        "permissions": {"allow": cfg.get("allowed_tools") or [],
-                        "deny": cfg.get("denied_tools") or [],
+        "permissions": {"allow": sorted(set((cfg.get("allowed_tools") or []) + _svc_rules()[0])),
+                        "deny": sorted(set((cfg.get("denied_tools") or []) + _svc_rules()[1])),
                         "defaultMode": cfg.get("permission_mode") or "acceptEdits"}
     }, ensure_ascii=False, indent=2))
     cmd = [exe, "-p", "--output-format", "stream-json", "--verbose",
@@ -783,6 +806,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._dev_get(path[len("/api/dev/"):], q)
         if path.startswith("/api/app/"):
             return self._app_get(path[len("/api/app/"):], q)
+        if path == "/api/stack":
+            return self._send(200, pm_services.state(project_id()))
+        if path == "/api/progress":
+            req = valid_req_name(q.get("req"))
+            if not req:
+                return self._send(200, {"items": [], "manifest": False})
+            try:
+                return self._send(200, pm_services.progress(project_id(), req))
+            except Exception as e:
+                return self._send(409, {"error": str(e)})
+        if path == "/api/svc/openapi":
+            try:
+                return self._send(200, {"paths": pm_services.openapi_paths(project_id(), q.get("id", ""))})
+            except (ValueError, RuntimeError) as e:
+                return self._send(409, {"error": str(e)})
         if path.startswith("/files/"):
             return self._file(unquote(path[len("/files/"):]))
         return self._send(404, {"error": "not found"})
@@ -797,8 +835,7 @@ class Handler(BaseHTTPRequestHandler):
             if name == "progress":
                 req = valid_req_name(q.get("req"))
                 import pm_sync  # noqa: E402
-                return self._send(200, pm_dev.progress(req, pm_sync.read_manifest, set(pm_app.screens()))
-                                  if req else {"items": []})
+                return self._send(200, pm_services.progress(project_id(), req) if req else {"items": []})
             if name == "users":
                 return self._send(200, {"users": pm_dev.list_users()})
             if name == "catalog":
@@ -949,6 +986,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, revert_last(req))
             except RuntimeError as e:
                 return self._send(409, {"error": str(e)})
+        if path.startswith("/api/svc/"):
+            name = path[len("/api/svc/"):]
+            try:
+                if name == "start":
+                    pm_services.start(project_id(), body.get("id", ""), bool(body.get("reinstall")))
+                    return self._send(200, {"ok": True})
+                if name == "stop":
+                    pm_services.stop(body.get("id", ""))
+                    return self._send(200, {"ok": True})
+                if name == "request":
+                    return self._send(200, pm_services.request(project_id(), body.get("id", ""), body.get("method"),
+                                                               body.get("path"), body.get("body", ""), body.get("headers") or {}))
+            except (RuntimeError, ValueError, OSError) as e:
+                return self._send(409, {"error": str(e)})
+            return self._send(404, {"error": "not found"})
         if path.startswith("/api/app/"):
             name = path[len("/api/app/"):]
             try:
@@ -1067,6 +1119,7 @@ def main():
     if server is None:
         raise SystemExit("找不到可用的連接埠")
     server.daemon_threads = True
+    pm_app.PID = pid
     write_runtime(PORT)
     register_project()
     url = f"http://127.0.0.1:{PORT}/"
@@ -1091,6 +1144,7 @@ def main():
         if run and not run.done:
             kill_tree(run.proc)
         pm_app.stop_all()
+        pm_services.stop_all()
         clear_runtime()
     return 0
 
