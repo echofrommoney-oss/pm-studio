@@ -848,7 +848,13 @@ document.querySelectorAll('#app-nav button').forEach(b => b.onclick = () => { AP
 
 function appSetupCard(){
   const e = AP.st?.env || {};
-  if (!e.flutter) return `<div class="be-pad"><div class="be-card"><strong>找不到 Flutter</strong><p>照 <code>docs.flutter.dev</code> 的 macOS 安裝說明裝好 Flutter SDK，終端機執行 <code>flutter doctor</code> 確認，再重開工作台。</p></div></div>`;
+  if (!e.flutter) return `<div class="be-pad"><div class="be-card"><strong>工作台找不到 flutter 指令</strong>
+    <p>如果你在終端機執行 <code>flutter doctor</code> 是正常的，代表 Flutter 已經裝好，只是工作台讀不到它的位置：</p>
+    <ol><li>終端機執行 <code>which flutter</code>，會得到像 <code>/Users/你/development/flutter/bin/flutter</code> 的路徑</li>
+    <li>打開專案裡的 <code>.pm-console/config.json</code>，把去掉最後 <code>/flutter</code> 的資料夾加進 <code>extra_path</code>，例如 <code>"extra_path": ["/Users/你/development/flutter/bin"]</code></li>
+    <li>關掉工作台視窗再重開</li></ol>
+    <p>還沒安裝的話，照 <code>docs.flutter.dev</code> 的 macOS 安裝說明安裝。</p>
+    <button class="btn" id="app-recheck">重新檢查</button></div></div>`;
   if (!e.app) return `<div class="be-pad"><div class="be-card"><strong>還沒有 Flutter 專案</strong><p>選「開發」→「APP」，Claude 會在 <code>app/</code> 建立專案、接上後端與設計 token，並依技術規格做畫面。</p></div></div>`;
   return '';
 }
@@ -858,7 +864,12 @@ function renderApp(){
   const v = $('#app-view'); v.className = 'be-view';
   if (AP.view === 'logs') return renderAppLogs(true);
   if (AP.view === 'progress') return renderAppProgress();
-  const setup = appSetupCard(); if (setup){ v.innerHTML = setup; return; }
+  const setup = appSetupCard(); if (setup){
+    v.innerHTML = setup;
+    const rc = $('#app-recheck');
+    if (rc) rc.onclick = async () => { rc.disabled = true; try{ AP.st = await api('/api/app/state?refresh=1'); }catch(e){} renderAppTop(); renderApp(); };
+    return;
+  }
   if (AP.view === 'preview'){
     const web = appRun('web');
     if (!isLive(web)){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>網頁預覽還沒啟動</strong><p>按上方「網頁預覽」的啟動。第一次編譯要一兩分鐘，進度在「日誌」。網頁預覽適合看版面、流程與文案；推播、相機、定位、地圖請用裝置確認。</p></div></div>`; return; }

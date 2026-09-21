@@ -71,6 +71,38 @@ def logs(service, start=0):
         return [x for x in buf if x["i"] >= start][-1500:], len(buf)
 
 
+COMMON_DIRS = ["~/development/flutter/bin", "~/flutter/bin", "~/fvm/default/bin", "~/.pub-cache/bin",
+               "/opt/homebrew/bin", "/usr/local/bin", "~/.local/bin", "~/Library/Android/sdk/platform-tools",
+               "~/.npm-global/bin", "~/.volta/bin", "/Applications/Docker.app/Contents/Resources/bin"]
+
+
+def augment_path(extra=None):
+    """工作台可能不是從設定好的終端機啟動，讀不到 .zshrc 裡加的路徑（Flutter 常見）。
+    啟動時向使用者的登入 shell 要一次 PATH，再補上常見安裝位置；只加存在的資料夾，不改使用者設定。"""
+    if os.name == "nt":
+        return []
+    found = []
+    shell = os.environ.get("SHELL") or "/bin/zsh"
+    try:
+        r = subprocess.run([shell, "-lic", 'printf "__PM_PATH__%s__END__" "$PATH"'], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=15, stdin=subprocess.DEVNULL)
+        m = re.search(r"__PM_PATH__(.*?)__END__", r.stdout, re.S)
+        if m:
+            found += m.group(1).split(":")
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    found += [os.path.expanduser(d) for d in (extra or []) + COMMON_DIRS]
+    current = os.environ.get("PATH", "").split(":")
+    added = []
+    for d in found:
+        d = d.strip()
+        if d and d not in current and d not in added and os.path.isdir(d):
+            added.append(d)
+    if added:
+        os.environ["PATH"] = ":".join(current + added)
+    return added
+
+
 def which(cmd):
     return shutil.which(cmd) or next((str(p) for p in (Path("/opt/homebrew/bin") / cmd, Path("/usr/local/bin") / cmd)
                                       if p.is_file()), None)

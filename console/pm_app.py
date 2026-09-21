@@ -385,8 +385,8 @@ def env():
 _ENV = {"at": 0, "data": None}
 
 
-def state():
-    if not _ENV["data"] or time.time() - _ENV["at"] > 60:
+def state(force=False):
+    if force or not _ENV["data"] or time.time() - _ENV["at"] > 60:
         _ENV.update(at=time.time(), data=env())
     e = dict(_ENV["data"], app=has_app())
     runs = {k: {"state": r.state, "label": r.label, "url": r.url, "platform": r.platform,

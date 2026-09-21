@@ -70,6 +70,8 @@ DEFAULT_CONFIG = {
         "Bash(dart format:*)", "Bash(dart fix:*)", "Bash(dart analyze:*)", "Bash(dart run build_runner:*)",
     ],
     "use_subscription": True,
+    # 工作台找不到某個工具時，把它所在的資料夾加在這裡，例如 ["~/development/flutter/bin"]
+    "extra_path": [],
     "auto_start_export_service": True,
     "language_rule": "文件正文、原型介面文案與給使用者的回覆一律使用繁體中文（台灣用語）。",
     "workflows": [
@@ -809,7 +811,7 @@ class Handler(BaseHTTPRequestHandler):
     def _app_get(self, name, q):
         try:
             if name == "state":
-                return self._send(200, pm_app.state())
+                return self._send(200, pm_app.state(force=q.get("refresh") == "1"))
             if name == "devices":
                 return self._send(200, pm_app.devices())
             if name == "screens":
@@ -1048,6 +1050,9 @@ def main():
     if args.check:
         return check()
     cfg = load_config()
+    added = pm_dev.augment_path(cfg.get("extra_path") or [])
+    if added:
+        print("  已從你的終端機設定補上工具路徑：" + "、".join(added))
     pid = project_id()
     TOKEN = secrets.token_urlsafe(24)
     server = None
