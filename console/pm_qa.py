@@ -144,6 +144,10 @@ def run(project_id, sid):
         env.update({k: v for k, v in vars_.items() if isinstance(v, str)})
         lines, tests, code = [], [], -1
         try:
+            if svc.get("depends_on") and not pm_services._start_deps(project_id, svc, key):
+                pm_dev.log(key, "依賴的服務沒有就緒，測試不執行。")
+                RUNNING.pop(sid, None)
+                return
             if svc["adapter"] == "flutter" and not svc.get("test"):
                 cmd = [pm_dev.which("flutter") or "flutter", "test", "--machine"]
                 shell = False
