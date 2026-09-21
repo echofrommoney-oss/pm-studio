@@ -35,7 +35,9 @@ DATA = ROOT / ".pm-console"
 UI_FILE = SCRIPTS / "pm_console.html"
 sys.path.insert(0, str(SCRIPTS))
 import pm_dev  # noqa: E402  與工作台同在 scripts/
+import pm_app  # noqa: E402
 pm_dev.init(ROOT, DATA)
+pm_app.init(ROOT, DATA)
 
 # 產物子資料夾名稱，須與 studio-pm-workflow匯出服務的 WRITABLE_SUBDIR_NAMES 一致。
 ARTIFACT_DIRS = ["需求挖掘", "需求文件", "原型", "流程圖", "原型驗證", "技術規格", "驗收清單", "資料分析", "上線",
@@ -63,6 +65,9 @@ DEFAULT_CONFIG = {
         "Bash(supabase status:*)", "Bash(supabase migration:*)", "Bash(supabase functions new:*)",
         "Bash(supabase gen types:*)", "Bash(supabase db lint:*)", "Bash(supabase db diff:*)",
         "Bash(supabase test db:*)", "Bash(supabase init:*)", "Bash(deno:*)",
+        "Bash(flutter create:*)", "Bash(flutter pub:*)", "Bash(flutter analyze:*)", "Bash(flutter test:*)",
+        "Bash(flutter gen-l10n:*)", "Bash(flutter --version:*)", "Bash(flutter doctor:*)", "Bash(flutter devices:*)",
+        "Bash(dart format:*)", "Bash(dart fix:*)", "Bash(dart analyze:*)", "Bash(dart run build_runner:*)",
     ],
     "use_subscription": True,
     "auto_start_export_service": True,
@@ -84,6 +89,7 @@ DEFAULT_CONFIG = {
         {"id": "sysdesign", "group": "系統", "label": "系統設計", "file": ".agents/workflows/pm-sysdesign.md"},
         {"id": "spec", "group": "系統", "label": "技術規格", "file": ".agents/workflows/pm-spec.md"},
         {"id": "backend", "group": "開發", "label": "後端", "file": ".agents/workflows/pm-backend.md"},
+        {"id": "app", "group": "開發", "label": "APP", "file": ".agents/workflows/pm-app.md"},
         {"id": "acceptance", "group": "QA", "label": "驗收清單", "file": ".agents/workflows/pm-acceptance.md"},
         {"id": "change", "group": "調整", "label": "變更", "file": ".agents/workflows/pm-change.md"},
         {"id": "free", "group": "調整", "label": "自由指令", "file": ""},
@@ -94,6 +100,7 @@ DEFAULT_CONFIG = {
         "Bash(supabase link:*)", "Bash(supabase db push:*)", "Bash(supabase functions deploy:*)",
         "Bash(supabase secrets set:*)", "Bash(supabase projects:*)", "Bash(supabase login:*)",
         "Bash(git push:*)", "Bash(git reset:*)", "Bash(git checkout:*)", "Bash(git clean:*)",
+        "Bash(flutter run:*)", "Bash(flutter emulators --launch:*)",
     ],
 }
 
@@ -384,6 +391,10 @@ def compose_prompt(cfg, req, workflow, message, first_turn):
         lines.append("- 開發環境：本機 Supabase " + (f"執行中（API {st.get('api')}，管理介面 {st.get('studio')}）" if st.get("running")
                      else "沒有在執行。需要它時不要自己啟動，請使用者按工作台上方的「Supabase」。")
                      + "只准操作本機，禁止連到任何遠端專案。本輪開始前工作台已做 git 快照，使用者可以一鍵退回。")
+        runs = pm_app.state()["runs"]
+        live = [f"{r['label']}（{r['state']}）" for r in runs.values() if r["state"] in ("starting", "running")]
+        lines.append("- APP：" + ("執行中：" + "、".join(live) + "。改完 Dart 程式後請使用者按右欄「APP」的熱重載或重新啟動。" if live
+                     else "沒有在執行。") + "不要執行 flutter run 或啟動模擬器，這些由工作台負責。")
     if workflow.get("instruction"):
         lines.append(f"- 補充指示：{workflow['instruction']}")
     lines += ["", "［使用者訊息］", message.strip()]
@@ -768,6 +779,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._stream(q.get("run", ""), int(q.get("from") or 0))
         if path.startswith("/api/dev/"):
             return self._dev_get(path[len("/api/dev/"):], q)
+        if path.startswith("/api/app/"):
+            return self._app_get(path[len("/api/app/"):], q)
         if path.startswith("/files/"):
             return self._file(unquote(path[len("/files/"):]))
         return self._send(404, {"error": "not found"})
@@ -782,13 +795,30 @@ class Handler(BaseHTTPRequestHandler):
             if name == "progress":
                 req = valid_req_name(q.get("req"))
                 import pm_sync  # noqa: E402
-                return self._send(200, pm_dev.progress(req, pm_sync.read_manifest) if req else {"items": []})
+                return self._send(200, pm_dev.progress(req, pm_sync.read_manifest, set(pm_app.screens()))
+                                  if req else {"items": []})
             if name == "users":
                 return self._send(200, {"users": pm_dev.list_users()})
             if name == "catalog":
                 api = pm_dev.openapi()
                 return self._send(200, {**api, "functions": pm_dev.functions()})
         except (RuntimeError, ValueError, OSError) as e:
+            return self._send(409, {"error": str(e)})
+        return self._send(404, {"error": "not found"})
+
+    def _app_get(self, name, q):
+        try:
+            if name == "state":
+                return self._send(200, pm_app.state())
+            if name == "devices":
+                return self._send(200, pm_app.devices())
+            if name == "screens":
+                return self._send(200, {"screens": pm_app.screens()})
+            if name == "screenshot":
+                return self._send(200, pm_app.screenshot(), "image/png")
+            if name == "devtools":
+                return self._send(200, {"url": pm_app.devtools_url()})
+        except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired) as e:
             return self._send(409, {"error": str(e)})
         return self._send(404, {"error": "not found"})
 
@@ -917,6 +947,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, revert_last(req))
             except RuntimeError as e:
                 return self._send(409, {"error": str(e)})
+        if path.startswith("/api/app/"):
+            name = path[len("/api/app/"):]
+            try:
+                if name == "start":
+                    run = pm_app.start(body.get("kind", "web"), project_id(), body.get("device"))
+                    return self._send(200, {"ok": True, "kind": run.kind})
+                if name == "stop":
+                    pm_app.stop(body.get("kind", "web"))
+                    return self._send(200, {"ok": True})
+                if name == "reload":
+                    return self._send(200, {"ok": True, "count": pm_app.reload(bool(body.get("full")))})
+            except (RuntimeError, ValueError, OSError) as e:
+                return self._send(409, {"error": str(e)})
+            return self._send(404, {"error": "not found"})
         if path.startswith("/api/dev/"):
             name = path[len("/api/dev/"):]
             try:
@@ -1041,6 +1085,7 @@ def main():
         run = CURRENT["run"]
         if run and not run.done:
             kill_tree(run.proc)
+        pm_app.stop_all()
         clear_runtime()
     return 0
 

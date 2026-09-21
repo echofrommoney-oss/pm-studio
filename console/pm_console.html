@@ -155,6 +155,12 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
 .be-status{font-weight:600}
 .be-status.s200{color:var(--ok)} .be-status.s400{color:var(--warn)} .be-status.s500{color:var(--bad)}
 .revert{margin-left:8px}
+/* APP 分頁 */
+.phone-wrap{flex:1;min-height:0;background:#eceaf2;overflow:hidden;position:relative}
+.phone{position:absolute;left:50%;top:50%;transform-origin:center center;border:12px solid #1d1b2b;border-radius:44px;background:#fff;box-shadow:0 18px 50px rgba(20,18,40,.25);overflow:hidden}
+.phone iframe{border:0;width:100%;height:100%;display:block;background:#fff}
+.shot-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#eceaf2;padding:16px}
+.shot-wrap img{max-height:100%;max-width:100%;border-radius:22px;box-shadow:0 18px 50px rgba(20,18,40,.25);background:#000}
 .banner{padding:9px 20px;background:#fbeeee;color:var(--bad);font-size:13px;border-bottom:1px solid #f0d3d4}
 @media (prefers-reduced-motion:no-preference){.working .now{animation:pulse 1.6s ease-in-out infinite}}
 @keyframes pulse{50%{opacity:.55}}
@@ -211,6 +217,7 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
   <section class="preview" aria-label="成品預覽" style="display:flex;flex-direction:column;min-height:0">
     <div class="pv-tabs" role="tablist">
       <button role="tab" data-tab="docs" aria-selected="true">文件</button>
+      <button role="tab" data-tab="app" aria-selected="false">APP</button>
       <button role="tab" data-tab="backend" aria-selected="false">後端</button>
     </div>
     <div class="tabpane" id="tab-docs">
@@ -224,6 +231,27 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
     <div class="pv-body" id="pv-body">
       <div class="pv-empty" id="pv-empty"><div><strong>成品會出現在這裡</strong>PRD、原型、流程圖產出後自動顯示。</div></div>
     </div>
+    </div>
+    <div class="tabpane" id="tab-app" hidden>
+      <div class="be-top">
+        <span>網頁預覽</span><button class="btn" id="app-web-btn">啟動</button>
+        <span style="margin-left:6px">裝置</span>
+        <select id="app-device" aria-label="執行裝置"><option value="">讀取中…</option></select>
+        <button class="btn" id="app-dev-btn">啟動</button>
+        <span class="spacer"></span>
+        <button class="btn" id="app-reload" title="保留畫面狀態，套用程式修改">熱重載</button>
+        <button class="btn" id="app-restart" title="從頭重新執行 APP">重新啟動</button>
+      </div>
+      <div class="be-main">
+        <nav class="be-nav" id="app-nav" aria-label="APP 功能">
+          <button data-view="preview">網頁預覽</button>
+          <button data-view="device">裝置畫面</button>
+          <button data-view="progress">建置進度</button>
+          <button data-view="devtools">DevTools</button>
+          <button data-view="logs">日誌</button>
+        </nav>
+        <div class="be-view" id="app-view"></div>
+      </div>
     </div>
     <div class="tabpane" id="tab-backend" hidden>
       <div class="be-top">
@@ -547,8 +575,9 @@ let TAB = 'docs';
 function switchTab(tab){
   TAB = tab;
   document.querySelectorAll('.pv-tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
-  $('#tab-docs').hidden = tab !== 'docs'; $('#tab-backend').hidden = tab !== 'backend';
+  $('#tab-docs').hidden = tab !== 'docs'; $('#tab-backend').hidden = tab !== 'backend'; $('#tab-app').hidden = tab !== 'app';
   if (tab === 'backend') beRefresh(true);
+  if (tab === 'app') appRefresh(true, true);
 }
 document.querySelectorAll('.pv-tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 
@@ -644,14 +673,14 @@ async function renderProgress(){
   let p; try{ p = await api('/api/dev/progress?req=' + encodeURIComponent(S.req)); }catch(e){ v.innerHTML = `<div class="be-pad">${esc(e.message)}</div>`; return; }
   if (!p.manifest){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>這個需求還沒有技術規格清單</strong><p>選「系統」→「技術規格」產出技術規格，開頭的 manifest 會列出要建的資料表、函式、畫面，這裡就能對照進度。</p></div></div>`; return; }
   const label = {done: '✓ 已建立', todo: '✗ 尚未建立', later: '之後的階段', unknown: '啟動後才能確認'};
-  const back = p.items.filter(i => i.state !== 'later'), later = p.items.filter(i => i.state === 'later');
+  const back = p.items.filter(i => i.state !== 'later' && i.kind !== 'app_screens'), later = p.items.filter(i => i.state === 'later');
   const done = back.filter(i => i.state === 'done').length;
   v.innerHTML = `<div class="be-pad">
     ${!p.running ? setupCard().replace('<div class="be-pad">', '<div style="margin-bottom:16px">') : ''}
     <h3>「${esc(S.req)}」後端 ${done} / ${back.length}</h3>
     ${back.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th></tr></thead><tbody>${back.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state}">${label[i.state]}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列後端項目。</p>'}
     ${p.error ? `<p class="st-todo">${esc(p.error)}</p>` : ''}
-    ${later.length ? `<h3>APP 與網站（第二、三階段）</h3><table class="be"><tbody>${later.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-later">之後的階段</td></tr>`).join('')}</tbody></table>` : ''}
+    ${later.length ? `<h3>網站（第三階段）</h3><table class="be"><tbody>${later.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-later">之後的階段</td></tr>`).join('')}</tbody></table>` : ''}
     <h3>資料庫遷移檔（${p.migrations.length}）</h3>
     ${p.migrations.length ? `<table class="be"><tbody>${p.migrations.slice(-8).reverse().map(m => `<tr><td>${esc(m)}</td></tr>`).join('')}</tbody></table>` : '<p>還沒有。選「開發」→「後端」開始。</p>'}
   </div>`;
@@ -762,6 +791,151 @@ setInterval(async () => {
 }, 4000);
 setInterval(() => { if (TAB !== 'backend' && !BE.st?.busy) beRefresh(false); }, 20000);
 
+
+/* ── APP ── */
+const AP = {view: 'preview', st: null, dev: null, size: 'iphone', logFrom: {'app-web': 0, 'app-device': 0, app: 0}, logs: [], shotTimer: null};
+const SIZES = {iphone: ['iPhone 15', 393, 852], pixel: ['Pixel 8', 412, 915], small: ['小尺寸', 360, 740]};
+async function appRefresh(render, withDevices){
+  try{ AP.st = await api('/api/app/state'); }catch(e){ return; }
+  if (withDevices || !AP.dev){ try{ AP.dev = await api('/api/app/devices'); }catch(e){ AP.dev = {devices: [], emulators: []}; } }
+  renderAppTop();
+  if (TAB === 'app' && render) renderApp();
+}
+function appRun(kind){ return (AP.st?.runs || {})[kind]; }
+function isLive(r){ return !!r && (r.state === 'starting' || r.state === 'running'); }
+function renderAppTop(){
+  const web = appRun('web'), dev = appRun('device');
+  const wb = $('#app-web-btn'); wb.textContent = isLive(web) ? (web.state === 'starting' ? '啟動中…（按一下停止）' : '停止') : '啟動';
+  const db = $('#app-dev-btn'); db.textContent = isLive(dev) ? (dev.state === 'starting' ? '啟動中…（按一下停止）' : '停止') : '啟動';
+  const sel = $('#app-device'); const cur = sel.value;
+  const d = AP.dev || {devices: [], emulators: []};
+  const openIds = new Set(d.devices.map(x => x.id));
+  sel.innerHTML = [...d.devices.map(x => `<option value="device|${esc(x.id)}">${esc(x.name)}（${x.platform === 'ios' ? 'iOS' : 'Android'}，已開啟）</option>`),
+    ...d.emulators.filter(x => !openIds.has(x.id)).map(x => `<option value="emulator|${esc(x.id)}">${esc(x.name)}（${esc(x.platform)} 模擬器，需啟動）</option>`)].join('')
+    || '<option value="">沒有裝置或模擬器</option>';
+  if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+  sel.disabled = isLive(dev);
+  const any = [web, dev].some(r => r && r.state === 'running');
+  $('#app-reload').disabled = $('#app-restart').disabled = !any;
+  const e = AP.st?.env || {};
+  wb.disabled = db.disabled = !e.flutter || !e.app;
+  const tabBtn = document.querySelector('.pv-tabs button[data-tab=app]');
+  tabBtn.innerHTML = 'APP' + ([web, dev].some(isLive) ? ' <span class="dot ok"></span>' : '');
+}
+$('#app-web-btn').onclick = async () => {
+  const web = appRun('web');
+  try{
+    if (isLive(web)) await api('/api/app/stop', {kind: 'web'});
+    else { await api('/api/app/start', {kind: 'web'}); AP.view = 'preview'; }
+    await appRefresh(true);
+  }catch(e){ alert(e.message); }
+};
+$('#app-dev-btn').onclick = async () => {
+  const dev = appRun('device');
+  try{
+    if (isLive(dev)) await api('/api/app/stop', {kind: 'device'});
+    else {
+      const [type, id] = ($('#app-device').value || '|').split('|');
+      if (!id){ alert('沒有可用的裝置或模擬器。Android Studio → Device Manager 建立一台，或打開 iOS 模擬器。'); return; }
+      await api('/api/app/start', {kind: 'device', device: {type, id}}); AP.view = 'device';
+    }
+    await appRefresh(true);
+  }catch(e){ alert(e.message); }
+};
+$('#app-reload').onclick = () => api('/api/app/reload', {full: false}).then(() => toast('已熱重載')).catch(e => alert(e.message));
+$('#app-restart').onclick = () => api('/api/app/reload', {full: true}).then(() => toast('已重新啟動')).catch(e => alert(e.message));
+document.querySelectorAll('#app-nav button').forEach(b => b.onclick = () => { AP.view = b.dataset.view; renderApp(); });
+
+function appSetupCard(){
+  const e = AP.st?.env || {};
+  if (!e.flutter) return `<div class="be-pad"><div class="be-card"><strong>找不到 Flutter</strong><p>照 <code>docs.flutter.dev</code> 的 macOS 安裝說明裝好 Flutter SDK，終端機執行 <code>flutter doctor</code> 確認，再重開工作台。</p></div></div>`;
+  if (!e.app) return `<div class="be-pad"><div class="be-card"><strong>還沒有 Flutter 專案</strong><p>選「開發」→「APP」，Claude 會在 <code>app/</code> 建立專案、接上後端與設計 token，並依技術規格做畫面。</p></div></div>`;
+  return '';
+}
+function renderApp(){
+  clearInterval(AP.shotTimer);
+  document.querySelectorAll('#app-nav button').forEach(b => b.setAttribute('aria-current', b.dataset.view === AP.view));
+  const v = $('#app-view'); v.className = 'be-view';
+  if (AP.view === 'logs') return renderAppLogs(true);
+  if (AP.view === 'progress') return renderAppProgress();
+  const setup = appSetupCard(); if (setup){ v.innerHTML = setup; return; }
+  if (AP.view === 'preview'){
+    const web = appRun('web');
+    if (!isLive(web)){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>網頁預覽還沒啟動</strong><p>按上方「網頁預覽」的啟動。第一次編譯要一兩分鐘，進度在「日誌」。網頁預覽適合看版面、流程與文案；推播、相機、定位、地圖請用裝置確認。</p></div></div>`; return; }
+    if (!web.url){ v.innerHTML = '<div class="be-pad">編譯中…進度在「日誌」。</div>'; return; }
+    const [, w, h] = SIZES[AP.size];
+    v.className = 'be-view frame';
+    v.innerHTML = `<div class="be-bar">尺寸 <select id="app-size" aria-label="預覽尺寸">${Object.entries(SIZES).map(([k, x]) => `<option value="${k}" ${k === AP.size ? 'selected' : ''}>${x[0]}（${x[1]}×${x[2]}）</option>`).join('')}</select><span style="flex:1"></span><a class="linkbtn" href="${esc(web.url)}" target="_blank" rel="noopener">新分頁開啟</a></div>
+      <div class="phone-wrap" id="phone-wrap"><div class="phone" id="phone" style="width:${w}px;height:${h}px"><iframe src="${esc(web.url)}" title="APP 網頁預覽"></iframe></div></div>`;
+    $('#app-size').onchange = e => { AP.size = e.target.value; renderApp(); };
+    fitPhone(); return;
+  }
+  if (AP.view === 'device'){
+    const dev = appRun('device');
+    if (!isLive(dev)){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>裝置還沒啟動</strong><p>在上方選一台裝置或模擬器，按「啟動」。模擬器本身會開在另一個視窗，這裡每幾秒更新一次它的畫面，方便你一邊跟 Claude 對話一邊看。iOS 模擬器需要先安裝 Xcode。</p></div></div>`; return; }
+    v.className = 'be-view frame';
+    v.innerHTML = `<div class="be-bar"><span id="shot-bar"></span><span style="flex:1"></span>每 3 秒更新一次畫面</div><div class="shot-wrap"><img id="app-shot" alt="裝置畫面"></div>`;
+    const load = () => {
+      const img = $('#app-shot'), d = appRun('device'); if (!img || !d) return;
+      $('#shot-bar').textContent = `${d.label} · ${d.state === 'running' ? '執行中' : '啟動中（模擬器開機要一兩分鐘）'}`;
+      if (d.state !== 'running') return;
+      const n = new Image(); n.onload = () => { img.src = n.src; }; n.src = '/api/app/screenshot?t=' + Date.now();
+    };
+    load(); AP.shotTimer = setInterval(() => { if (TAB === 'app' && AP.view === 'device') load(); }, 3000);
+    return;
+  }
+  if (AP.view === 'devtools'){
+    v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>Flutter DevTools</strong><p>看元件結構、版面、網路請求與效能。APP 要先啟動。</p><button class="btn primary" id="dt-open">開啟 DevTools</button></div></div>`;
+    $('#dt-open').onclick = async () => {
+      $('#dt-open').disabled = true; $('#dt-open').textContent = '啟動中…';
+      try{ const r = await api('/api/app/devtools'); v.className = 'be-view frame'; v.innerHTML = frameView(r.url, 'Flutter DevTools'); }
+      catch(e){ alert(e.message); renderApp(); }
+    };
+  }
+}
+function fitPhone(){
+  const wrap = $('#phone-wrap'), ph = $('#phone'); if (!wrap || !ph) return;
+  const [, w, h] = SIZES[AP.size];
+  const k = Math.min(1, (wrap.clientHeight - 32) / (h + 24), (wrap.clientWidth - 32) / (w + 24));
+  ph.style.transform = `translate(-50%, -50%) scale(${k})`;
+}
+window.addEventListener('resize', () => { if (TAB === 'app' && AP.view === 'preview') fitPhone(); });
+async function renderAppProgress(){
+  const v = $('#app-view');
+  if (!S.req){ v.innerHTML = '<div class="be-pad">先在左邊選一個需求。</div>'; return; }
+  let p, sc = {};
+  try{ p = await api('/api/dev/progress?req=' + encodeURIComponent(S.req)); sc = (await api('/api/app/screens')).screens; }
+  catch(e){ v.innerHTML = `<div class="be-pad">${esc(e.message)}</div>`; return; }
+  if (!p.manifest){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>這個需求還沒有技術規格清單</strong><p>選「系統」→「技術規格」產出，開頭的 manifest 會列出 APP 畫面。</p></div></div>`; return; }
+  const items = p.items.filter(i => i.kind === 'app_screens');
+  const done = items.filter(i => i.state === 'done').length;
+  v.innerHTML = `<div class="be-pad"><h3>「${esc(S.req)}」APP 畫面 ${done} / ${items.length}</h3>
+    ${items.length ? `<table class="be"><thead><tr><th>畫面代號</th><th>狀態</th><th>程式檔</th></tr></thead><tbody>${items.map(i => `<tr><td>${esc(i.name)}</td><td class="st-${i.state}">${i.state === 'done' ? '✓ 已實作' : '✗ 尚未實作'}</td><td>${esc(sc[i.name] || '')}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列 APP 畫面。</p>'}
+    <p style="color:var(--muted);font-size:12.5px;margin-top:10px">判斷方式：畫面檔第一行的 <code>// pm-screen: 代號</code> 標記。</p></div>`;
+}
+async function renderAppLogs(reset){
+  const v = $('#app-view');
+  if (reset){ AP.logs = []; AP.logFrom = {'app-web': 0, 'app-device': 0, app: 0}; v.innerHTML = '<div class="be-bar">APP 的編譯與執行輸出、print／debugPrint 訊息<span style="flex:1"></span><button class="linkbtn" id="alog-clear">清除畫面</button></div><pre class="be-log" id="app-log"></pre>'; $('#alog-clear').onclick = () => { AP.logs = []; $('#app-log').textContent = ''; }; }
+  for (const svc of Object.keys(AP.logFrom)){
+    try{ const r = await api(`/api/dev/logs?service=${svc}&from=${AP.logFrom[svc]}`); AP.logFrom[svc] = r.total; AP.logs.push(...r.items.map(x => ({...x, svc}))); }catch(e){}
+  }
+  AP.logs.sort((a, b) => a.t - b.t);
+  const el = $('#app-log'); if (!el) return;
+  const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 60;
+  const tag = {'app-web': '[網頁] ', 'app-device': '[裝置] ', app: ''};
+  el.textContent = AP.logs.map(x => `${new Date(x.t * 1000).toLocaleTimeString('zh-TW', {hour12: false})}  ${tag[x.svc]}${x.text}`).join('\n') || '（還沒有紀錄）';
+  if (atBottom || reset) v.scrollTop = v.scrollHeight;
+}
+setInterval(async () => {
+  const live = ['web', 'device'].some(k => isLive(appRun(k)));
+  if (TAB !== 'app' && !live) return;
+  const before = JSON.stringify(AP.st?.runs || {});
+  await appRefresh(false);
+  if (TAB !== 'app') return;
+  if (AP.view === 'logs') renderAppLogs(false);
+  else if (JSON.stringify(AP.st?.runs || {}) !== before && AP.view !== 'device') renderApp();
+}, 3000);
+
 /* ── 啟動 ── */
 (async () => {
   await refreshState();
@@ -770,6 +944,7 @@ setInterval(() => { if (TAB !== 'backend' && !BE.st?.busy) beRefresh(false); }, 
   const pick = S.state?.run && !S.state.run.done ? S.state.run.req : (reqs.find(r => r.name === saved) ? saved : reqs[0]?.name);
   if (pick) selectReq(pick);
   beRefresh(false);
+  appRefresh(false, true);
   setInterval(() => { if (!S.live) refreshState(); }, 8000);
 })();
 </script>

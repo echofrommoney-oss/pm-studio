@@ -52,6 +52,7 @@ Artifacts are organized **per requirement**: each requirement gets ONE top-level
 | System design, SA/SD, architecture, tech stack, data model overview | `.agents/workflows/pm-sysdesign.md` | `ARCHITECTURE.md` (project root) |
 | Engineering handoff, tech spec, 技術規格 | `.agents/workflows/pm-spec.md` | `[需求名]/技術規格/[需求名]-spec.md` (with `manifest` frontmatter) |
 | Backend development on local Supabase: tables, RLS, storage, functions, cron, seed | `.agents/workflows/pm-backend.md` | `supabase/` |
+| Flutter APP development: screens from prototype, tokens from DESIGN.md, local Supabase | `.agents/workflows/pm-app.md` | `app/` |
 | Any change to an existing requirement, "同步", out-of-date documents | `.agents/workflows/pm-change.md` | every affected document rewritten to the latest consistent version |
 | Usability test, prototype validation, test notes to synthesize | `.agents/workflows/pm-validate.md` | `[需求名]/原型驗證/[需求名]-測試腳本.md`, `-驗證結果.md` |
 | Release notes, launch checklist, landing page, store listing, pricing | `.agents/workflows/pm-launch.md` | `[需求名]/上線/` |

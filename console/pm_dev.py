@@ -425,7 +425,7 @@ def migrations():
     return sorted(f.name for f in folder.glob("*.sql")) if folder.is_dir() else []
 
 
-def progress(req, read_manifest):
+def progress(req, read_manifest, app_screens=None):
     manifest = read_manifest(ROOT, req)
     result = {"req": req, "manifest": manifest is not None, "items": [], "migrations": migrations()}
     if manifest is None:
@@ -446,10 +446,12 @@ def progress(req, read_manifest):
         for name in names:
             if key == "functions":
                 state = "done" if name in fn else "todo"
+            elif key == "app_screens" and app_screens is not None:
+                state = "done" if name in app_screens else "todo"
             elif key in have:
                 state = ("done" if name in have[key] else "todo") if running else "unknown"
             else:
-                state = "later"  # APP 與前端：第二、三階段
+                state = "later"  # 網站：第三階段
             result["items"].append({"kind": key, "label": labels[key], "name": name, "state": state})
     result["running"] = bool(running)
     return result

@@ -63,6 +63,27 @@ Chrome 擴充功能要手動載入一次（步驟在安裝後專案裡的 `設�
 
 **安全網**：「系統」和「開發」兩組的每一輪，執行前工作台會先做 git 快照；回覆下方有「退回這一輪」，用還原提交抵銷那一輪的修改（歷史保留）。改過資料庫的話，退回後再按「重置測試資料」。
 
+## 開發（第二階段：APP）
+
+- **開發 → APP**：在 `app/` 建立 Flutter 專案，依原型、`DESIGN.md` 與技術規格實作畫面，接上本機 Supabase。
+- **設計 token**：`python3 scripts/pm_tokens.py dart` 由 `DESIGN.md` 產生 `app/lib/theme/tokens.dart`，APP 不手寫色碼。
+- 每個畫面檔第一行寫 `// pm-screen: 畫面代號`，工作台用它對照技術規格顯示進度。
+
+右欄多一個「**APP**」分頁：
+
+| 功能 | 做什麼 |
+|---|---|
+| 網頁預覽 | Flutter 網頁版放在手機外框裡，可切換 iPhone／Pixel／小尺寸 |
+| 裝置畫面 | 選模擬器或實機啟動，這裡每 3 秒更新一次畫面（模擬器本身開在另一個視窗） |
+| 熱重載／重新啟動 | Claude 改完程式，按一下就看到結果 |
+| 建置進度 | 技術規格列的 APP 畫面哪些已實作 |
+| DevTools | Flutter 官方除錯工具：元件結構、網路請求、效能 |
+| 日誌 | 編譯與執行輸出、`print` 訊息 |
+
+工作台會依執行目標自動設定後端網址：Android 模擬器連不到 `127.0.0.1`，會自動改成 `10.0.2.2`。本機 Supabase 沒開時 APP 仍能啟動，但拿不到資料。
+
+**需要先裝**：Flutter SDK；Android 用 Android Studio 建好的模擬器；iOS 需要 Xcode（要求較新的 macOS）。推播、相機、定位、地圖請以裝置為準，網頁預覽不準。
+
 ## 更新所有專案
 
 更新這個套件後，打開專案總覽按「**更新所有專案**」，或在終端機執行：
@@ -117,7 +138,8 @@ git config --global user.email "你的信箱"
 │  ├─ 原型驗證/  技術規格/  驗收清單/  資料分析/  上線/
 │  └─ 素材/                             你提供的原始材料（不是交付物）
 ├─ supabase/                            後端（資料表、權限、函式、示範資料）
-├─ .agents/workflows/                   11 份工作流說明書
+├─ app/                                 Flutter APP
+├─ .agents/workflows/                   12 份工作流說明書
 ├─ .claude/skills/  .claude/agents/     設計層
 ├─ scripts/                             匯出服務、工作台、pm_sync、validate_prd
 ├─ .pm-workflow/  .pm-console/  .handoff/   隱藏：設定、續接脈絡、同步紀錄、自動備份
