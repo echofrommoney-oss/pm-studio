@@ -163,7 +163,14 @@ def variables(project_id, target=""):
 
 
 def render(template, vars_):
-    return re.sub(r"\{([A-Z0-9_]+)\}", lambda m: str(vars_.get(m.group(1), "")), str(template))
+    """替換 {變數}；大小寫都認得（{port} 與 {PORT} 相同）。不認得的變數保留原樣，方便看出寫錯。"""
+    def sub(m):
+        key = m.group(1)
+        for k in (key, key.upper()):
+            if k in vars_:
+                return str(vars_[k])
+        return m.group(0)
+    return re.sub(r"\{([A-Za-z][A-Za-z0-9_]*)\}", sub, str(template))
 
 
 # ───────────── 執行 ─────────────
@@ -241,14 +248,18 @@ def start(project_id, sid, reinstall=False):
 
     def job():
         try:
-            vars_ = variables(project_id)
+            vars_ = dict(variables(project_id), PORT=str(svc["port"]))
             env = dict(os.environ, BROWSER="none", NEXT_TELEMETRY_DISABLED="1", PORT=str(svc["port"]),
                        FORCE_COLOR="0")
-            rendered = {k: render(v, vars_) for k, v in svc["env"].items()}
+            port = str(svc["port"])
+            rendered = {k: render(str(v).replace("{port}", port), vars_) for k, v in svc["env"].items()}
             if svc["env_file"]:
                 lines = ["# 由 PM 工作台在啟動時產生，請勿手改；指向本機開發環境。"] + [f"{k}={v}" for k, v in rendered.items()]
                 (folder / svc["env_file"]).write_text("\n".join(lines) + "\n", encoding="utf-8")
             env.update(rendered)
+            for k, v in rendered.items():
+                if re.search(r"\{\w+\}", v):
+                    pm_dev.log(key, f"⚠️ 環境變數 {k} 裡有工作台不認得的變數：{v}（可用的見 pm-sysdesign.md）")
             if not vars_.get("BACKEND_URL") and svc["role"] != "backend":
                 pm_dev.log(key, "⚠️ 沒有執行中的後端，需要資料的畫面會拿不到東西。")
             if reinstall or _needs_install(svc, folder):
@@ -264,7 +275,7 @@ def start(project_id, sid, reinstall=False):
                     return
                 (DATA / "installed").mkdir(parents=True, exist_ok=True)
                 (DATA / "installed" / sid).write_text(str(time.time()), encoding="utf-8")
-            run.proc = _shell_run(key, render(svc["run"].replace("{port}", str(svc["port"])), vars_), folder, env)
+            run.proc = _shell_run(key, render(svc["run"], vars_), folder, env)
             if not svc.get("ready"):
                 run.state = "running"
             threading.Thread(target=run._read, daemon=True).start()

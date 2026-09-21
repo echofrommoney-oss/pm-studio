@@ -506,6 +506,7 @@ function attachRun(run){
 }
 async function finishRun(){
   clearInterval(S.poll);
+  if (typeof loadStack === 'function') loadStack().then(() => { if (TAB === 'setup' && (STACK?.services || []).length) switchTab(firstDevTab()); });
   const req = S.run?.req; S.run = null; S.live = null; S.es = null;
   await refreshState();
   if (req && req === S.req) await loadReq(req, true);
@@ -596,6 +597,7 @@ function switchTab(tab){
   if (tab === 'backend') beRefresh(true);
   if (tab === 'app') appRefresh(true, true);
   if (tab.startsWith('svc-')) loadStack().then(() => renderSvc(tab.slice(4)));
+  if (tab === 'setup') loadStack().then(() => { if ((STACK?.services || []).length) switchTab(firstDevTab()); });
 }
 document.querySelectorAll('.pv-tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 
@@ -972,7 +974,13 @@ let STACK = null;
 const SV = {};   // role -> {sid, view, size, path, logFrom, logs, apiOut}
 const VIEWPORTS = {desktop: ['桌機', 1440, 900], tablet: ['平板', 834, 1112], mobile: ['手機', 390, 844]};
 async function loadStack(){
-  try{ STACK = await api('/api/stack'); }catch(e){ return; }
+  try{ STACK = await api('/api/stack'); }
+  catch(e){
+    const msg = /404/.test(e.message) ? '工作台程式還是舊版：請把這個專案的工作台視窗關掉，再重新開啟。' : e.message;
+    document.querySelector('.pv-tabs button[data-tab="setup"]').hidden = false;
+    $('#tab-setup').innerHTML = `<div class="be-pad"><div class="be-card"><strong>讀不到開發服務</strong><p>${esc(msg)}</p></div></div>`;
+    return;
+  }
   const svcs = STACK.services || [];
   const has = (pred) => svcs.some(pred);
   const show = (tab, on, label) => { const b = document.querySelector(`.pv-tabs button[data-tab="${tab}"]`); if (b){ b.hidden = !on; if (label) b.dataset.label = label; } };
@@ -986,6 +994,11 @@ async function loadStack(){
   $('#st-sb').hidden = !supa;
   if (TAB !== 'docs' && document.querySelector(`.pv-tabs button[data-tab="${TAB}"]`)?.hidden) switchTab('docs');
 }
+function firstDevTab(){
+  const b = [...document.querySelectorAll('.pv-tabs button')].find(x => !x.hidden && !['docs', 'setup'].includes(x.dataset.tab));
+  return b ? b.dataset.tab : 'docs';
+}
+setInterval(() => { if (!document.hidden && !TAB.startsWith('svc-')) loadStack(); }, 15000);
 function svcList(role){ return (STACK?.services || []).filter(s => s.role === role && !['supabase', 'flutter'].includes(s.adapter)); }
 function svcState(role){
   const S0 = SV[role] || (SV[role] = {sid: '', view: 'preview', size: role === 'web' ? 'desktop' : 'mobile', path: '/', logFrom: 0, logs: [], apiOut: null});

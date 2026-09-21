@@ -108,6 +108,9 @@ def write_defines(target):
     path = folder / f"defines-{target}.json"
     data = {"SUPABASE_URL": v.get("SUPABASE_URL", ""), "SUPABASE_ANON_KEY": v.get("SUPABASE_ANON_KEY", ""),
             "BACKEND_URL": v.get("BACKEND_URL", ""), "API_URL": v.get("API_URL", ""), "APP_ENV": "local"}
+    svc = flutter_service()
+    for k, tmpl in ((svc or {}).get("env") or {}).items():   # ARCHITECTURE.md 為 APP 設定的變數，例如 API_BASE_URL
+        data[str(k)] = pm_services.render(tmpl, v)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     gi = folder / ".gitignore"
     if not gi.exists():

@@ -807,7 +807,10 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/app/"):
             return self._app_get(path[len("/api/app/"):], q)
         if path == "/api/stack":
-            return self._send(200, pm_services.state(project_id()))
+            try:
+                return self._send(200, pm_services.state(project_id()))
+            except Exception as e:
+                return self._send(500, {"error": f"讀取 ARCHITECTURE.md 的服務設定失敗：{e}"})
         if path == "/api/progress":
             req = valid_req_name(q.get("req"))
             if not req:
