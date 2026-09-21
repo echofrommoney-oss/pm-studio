@@ -43,12 +43,13 @@ DEPENDS = {
     "proto_shots": ["proto"],
     "flow_shots": ["flow"],
     "validate": ["prd", "proto"],
-    "spec": ["prd"],
+    "spec": ["prd", "arch"],
     "accept": ["prd"],
     "launch": ["prd", "design"],
 }
 LABEL = {code: label for code, label, _, _ in STAGES}
 LABEL["design"] = "DESIGN.md"
+LABEL["arch"] = "ARCHITECTURE.md"
 SKIP_TOP = {"scripts", "node_modules", "assets", "templates"}
 ARTIFACT_DIRS = {sub for _, _, sub, _ in STAGES}
 
@@ -91,8 +92,10 @@ def status(root, req):
     root = Path(root)
     req_dir = root / req
     design = root / "DESIGN.md"
+    arch = root / "ARCHITECTURE.md"
     groups = {code: stage_files(req_dir, code) for code, *_ in STAGES}
     groups["design"] = [design] if design.is_file() else []
+    groups["arch"] = [arch] if arch.is_file() else []
     mt = {code: latest(files) for code, files in groups.items()}
 
     mark = {}
@@ -121,17 +124,45 @@ def status(root, req):
             stale.append({"stage": down, "label": LABEL[down], "behind": behind})
 
     stages = {code: {"label": LABEL[code], "files": len(groups[code]), "mtime": mt[code]}
-              for code in groups if code != "design"}
+              for code in groups if code not in ("design", "arch")}
     return {"req": req, "stages": stages, "stale": stale,
             "marked_at": mark.get("at"), "has_design": bool(groups["design"])}
+
+
+MANIFEST_KEYS = ("tables", "functions", "rpc", "buckets", "app_screens", "web_admin", "web_partner", "web_site")
+
+
+def read_manifest(root, req):
+    """讀技術規格開頭的 manifest（單行中括號清單）。沒有 Spec 或沒有 manifest 回傳 None。"""
+    folder = Path(root) / req / "技術規格"
+    specs = sorted(folder.glob("*.md")) if folder.is_dir() else []
+    if not specs:
+        return None
+    text = specs[0].read_text(encoding="utf-8", errors="replace").replace("\r", "")
+    if not text.startswith("---"):
+        return None
+    end = text.find("\n---", 3)
+    if end < 0:
+        return None
+    out = {}
+    for line in text[3:end].splitlines():
+        key, sep, value = line.strip().partition(":")
+        if not sep or key not in MANIFEST_KEYS:
+            continue
+        value = value.strip()
+        if value.startswith("[") and value.endswith("]"):
+            items = [v.strip().strip("'\"") for v in value[1:-1].split(",")]
+            out[key] = [v for v in items if v]
+    return {k: out.get(k, []) for k in MANIFEST_KEYS} if out else None
 
 
 def mark(root, req):
     root = Path(root)
     req_dir = root / req
     mtimes = {code: latest(stage_files(req_dir, code)) for code, *_ in STAGES}
-    design = root / "DESIGN.md"
-    mtimes["design"] = design.stat().st_mtime if design.is_file() else None
+    for key, name in (("design", "DESIGN.md"), ("arch", "ARCHITECTURE.md")):
+        f = root / name
+        mtimes[key] = f.stat().st_mtime if f.is_file() else None
     path = sync_path(root, req)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"req": req, "at": time.time(),
@@ -217,13 +248,13 @@ def uncommitted(root):
 
 
 def commit(root, req, message):
-    """只提交本需求資料夾與專案級設計檔，不碰使用者其他檔案。"""
+    """只提交本需求資料夾、專案級文件（PRODUCT／DESIGN／ARCHITECTURE）與程式資料夾（supabase、app、web），不碰使用者其他檔案。"""
     root = Path(root)
     if not git_ready(root):
         print("這個專案還不是 git 儲存庫，略過提交（重新執行 install.py 會自動初始化）。")
         return 0
     # 存在的、或曾被追蹤過的（整個需求被刪除時也要記錄刪除）
-    paths = [p for p in (req, "PRODUCT.md", "DESIGN.md")
+    paths = [p for p in (req, "PRODUCT.md", "DESIGN.md", "ARCHITECTURE.md", "supabase", "app", "web")
              if p and ((root / p).exists() or git(root, "ls-files", "--", p).stdout.strip())]
     if not paths:
         print("沒有變動需要提交。")

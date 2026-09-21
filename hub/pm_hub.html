@@ -80,6 +80,7 @@ code{background:#efeef4;border-radius:4px;padding:1px 5px;font-size:.92em}
       <div class="summary" id="summary">讀取中…</div>
     </div>
     <div class="tools">
+      <button class="btn" id="btn-update" title="把這個 pm-studio 的最新版裝進清單裡的每個專案">更新所有專案</button>
       <button class="btn" id="btn-add">加入專案</button>
       <button class="btn" id="btn-refresh">重新整理</button>
     </div>
@@ -102,7 +103,7 @@ function ago(t){
   if (s < 86400) return Math.floor(s/3600) + ' 小時前'; if (s < 86400*14) return Math.floor(s/86400) + ' 天前';
   const d = new Date(t*1000); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
 }
-function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200); }
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 6000); }
 async function post(path, body){
   const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json','X-Hub-Token':BOOT.token}, body: JSON.stringify(body)});
   const d = await r.json().catch(() => ({}));
@@ -183,6 +184,17 @@ async function load(){
   }catch(e){ $('#summary').textContent = '讀取失敗：' + e.message; }
 }
 $('#btn-refresh').onclick = load;
+$('#btn-update').onclick = async () => {
+  if (!confirm('把目前這份 pm-studio 的最新版裝進清單裡的每個專案？\n\n對話紀錄、PRODUCT.md、DESIGN.md、需求文件與程式都不會被動到。')) return;
+  const b = $('#btn-update'); b.disabled = true; b.textContent = '更新中…';
+  try{
+    const r = await post('/api/update-all', {});
+    const names = r.running.map(p => p.split('/').pop());
+    toast(r.ok ? (names.length ? `已更新。請把開著的工作台關掉重開：${names.join('、')}` : '已更新所有專案。') : '部分專案更新失敗，請在終端機執行 python3 install.py --all 查看原因。');
+    load();
+  }catch(e){ toast(e.message); }
+  finally{ b.disabled = false; b.textContent = '更新所有專案'; }
+};
 $('#btn-add').onclick = () => { $('#add').classList.toggle('show'); $('#add-path').focus(); };
 $('#add').onsubmit = async e => {
   e.preventDefault();

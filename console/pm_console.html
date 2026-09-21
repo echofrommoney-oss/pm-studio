@@ -87,9 +87,12 @@ details.acts summary{cursor:pointer;color:var(--muted)}
 .welcome h3{color:var(--ink);font-size:16px;margin:0 0 6px}
 
 .composer{border-top:1px solid var(--line);padding:12px 14px 14px;background:var(--surface)}
-.wfs{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:start;margin-bottom:9px}
-.wfg{font-size:12px;color:var(--faint);padding-top:4px;white-space:nowrap}
-.wfrow{display:flex;flex-wrap:wrap;gap:6px}
+.wfs{margin-bottom:9px}
+.wftabs{display:flex;gap:2px;margin-bottom:7px;border-bottom:1px solid var(--line)}
+.wftabs button{border:0;background:none;padding:3px 9px 5px;font-size:12.5px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.wftabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.wfrow{display:flex;flex-wrap:wrap;gap:6px;min-height:28px}
+.wfrow[hidden]{display:none}
 .wfs label{position:relative}
 .wfs input{position:absolute;opacity:0;pointer-events:none}
 .wfs label span{display:inline-block;border:1px solid var(--line-strong);border-radius:999px;padding:3px 11px;font-size:12.5px;color:var(--muted);cursor:pointer}
@@ -113,6 +116,45 @@ textarea:focus{border-color:var(--accent);outline:none}
 .pv-sync[hidden]{display:none}
 .pv-sync b{font-weight:600}
 .req-meta .warn{color:var(--warn)}
+/* 右欄分頁 */
+.pv-tabs{display:flex;gap:2px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.pv-tabs button{border:0;background:none;padding:9px 12px 8px;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.pv-tabs button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.tabpane{flex:1;min-height:0;display:flex;flex-direction:column}
+.tabpane[hidden]{display:none}
+.pill{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:2px 10px;font-size:12.5px;color:var(--muted)}
+.pill:hover{border-color:var(--accent)}
+/* 後端分頁 */
+.be-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px}
+.be-top select{border:1px solid var(--line-strong);border-radius:7px;padding:3px 6px;background:var(--surface);max-width:240px}
+.be-top .spacer{flex:1}
+.be-main{flex:1;min-height:0;display:grid;grid-template-columns:112px 1fr}
+.be-nav{border-right:1px solid var(--line);background:var(--surface);padding:8px 6px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.be-nav button{border:0;background:none;text-align:left;padding:6px 9px;border-radius:7px;font-size:13px;color:var(--muted)}
+.be-nav button:hover{background:#efeef4}
+.be-nav button[aria-current="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.be-view{min-width:0;min-height:0;overflow:auto;position:relative}
+.be-view.frame{overflow:hidden;display:flex;flex-direction:column}
+.be-view.frame iframe{flex:1;border:0;width:100%;background:#fff}
+.be-bar{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);background:var(--surface);font-size:12.5px;color:var(--muted)}
+.be-pad{padding:16px 18px}
+.be-pad h3{font-size:14px;margin:0 0 10px}
+.be-pad h3:not(:first-child){margin-top:24px}
+.be-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;max-width:640px}
+.be-card ol{margin:8px 0 0;padding-left:1.3em}.be-card li{margin:6px 0}
+.be-card code,.be-pad code{background:#f0eff5;border-radius:4px;padding:1px 5px;font-size:.92em}
+table.be{border-collapse:collapse;width:100%;font-size:13px;background:var(--surface)}
+table.be th{font-weight:500;color:var(--faint);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-size:12px}
+table.be td{padding:7px 8px;border-bottom:1px solid #f0eff4;vertical-align:top;word-break:break-all}
+.st-done{color:var(--ok)} .st-todo{color:var(--bad)} .st-later,.st-unknown{color:var(--faint)}
+.be-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.be-form input,.be-form select,.be-form textarea{border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--surface);font-size:13px}
+.be-form textarea,.be-pad textarea{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;min-height:90px;border:1px solid var(--line-strong);border-radius:7px;padding:8px}
+pre.be-out{background:#f6f5f9;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:420px;overflow:auto;margin:8px 0 0}
+pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;color:#34324a}
+.be-status{font-weight:600}
+.be-status.s200{color:var(--ok)} .be-status.s400{color:var(--warn)} .be-status.s500{color:var(--bad)}
+.revert{margin-left:8px}
 .banner{padding:9px 20px;background:#fbeeee;color:var(--bad);font-size:13px;border-bottom:1px solid #f0d3d4}
 @media (prefers-reduced-motion:no-preference){.working .now{animation:pulse 1.6s ease-in-out infinite}}
 @keyframes pulse{50%{opacity:.55}}
@@ -132,6 +174,7 @@ textarea:focus{border-color:var(--accent);outline:none}
     <span id="st-claude"></span>
     <span id="st-export"></span>
     <span id="st-design"></span>
+    <span id="st-sb"></span>
   </div>
 </header>
 
@@ -165,7 +208,12 @@ textarea:focus{border-color:var(--accent);outline:none}
     </div>
   </section>
 
-  <section class="preview" aria-label="成品預覽">
+  <section class="preview" aria-label="成品預覽" style="display:flex;flex-direction:column;min-height:0">
+    <div class="pv-tabs" role="tablist">
+      <button role="tab" data-tab="docs" aria-selected="true">文件</button>
+      <button role="tab" data-tab="backend" aria-selected="false">後端</button>
+    </div>
+    <div class="tabpane" id="tab-docs">
     <div class="pv-head">
       <select id="pv-select" aria-label="選擇成品" disabled><option>還沒有成品</option></select>
       <button class="btn" id="btn-reload" disabled>重新整理</button>
@@ -175,6 +223,28 @@ textarea:focus{border-color:var(--accent);outline:none}
     <div class="pv-note" id="pv-note" hidden></div>
     <div class="pv-body" id="pv-body">
       <div class="pv-empty" id="pv-empty"><div><strong>成品會出現在這裡</strong>PRD、原型、流程圖產出後自動顯示。</div></div>
+    </div>
+    </div>
+    <div class="tabpane" id="tab-backend" hidden>
+      <div class="be-top">
+        <label>目前身分 <select id="be-ident" aria-label="目前身分"></select></label>
+        <span class="spacer"></span>
+        <span id="be-summary"></span>
+        <button class="btn" id="be-reset" title="依遷移檔與 seed.sql 重建本機資料庫">重置測試資料</button>
+      </div>
+      <div class="be-main">
+        <nav class="be-nav" id="be-nav" aria-label="後端功能">
+          <button data-view="progress">建置進度</button>
+          <button data-view="db">資料庫</button>
+          <button data-view="auth">帳號</button>
+          <button data-view="mail">測試信箱</button>
+          <button data-view="files">檔案</button>
+          <button data-view="fn">後端函式</button>
+          <button data-view="api">API 測試</button>
+          <button data-view="logs">日誌</button>
+        </nav>
+        <div class="be-view" id="be-view"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -236,11 +306,20 @@ const actLine = a => `<div class="act${a.err?' err':''}"><b>${esc(TOOL[a.name]||
   const groups = [];
   BOOT.workflows.forEach(w => { let g = groups.find(x => x.name === w.group); if (!g) groups.push(g = {name: w.group, items: []}); g.items.push(w); });
   let first = true;
-  $('#wfs').innerHTML = groups.map(g => `<span class="wfg">${esc(g.name)}</span><div class="wfrow">` + g.items.map(w => {
-    const html = `<label><input type="radio" name="wf" value="${esc(w.id)}" ${first?'checked':''}><span>${esc(w.label)}</span></label>`;
-    first = false; return html; }).join('') + '</div>').join('');
+  $('#wfs').innerHTML = `<div class="wftabs" role="tablist">${groups.map((g,i) => `<button type="button" role="tab" data-g="${i}" aria-selected="${i===0}">${esc(g.name)}</button>`).join('')}</div>`
+    + groups.map((g,i) => `<div class="wfrow" data-g="${i}" ${i?'hidden':''}>` + g.items.map(w => {
+      const html = `<label><input type="radio" name="wf" value="${esc(w.id)}" ${first?'checked':''}><span>${esc(w.label)}</span></label>`;
+      first = false; return html; }).join('') + '</div>').join('');
+  $('#wfs').querySelectorAll('.wftabs button').forEach(b => b.onclick = () => showGroup(b.dataset.g));
 })();
-function pickWorkflow(id){ const r = document.querySelector(`input[name=wf][value="${id}"]`); if (r) r.checked = true; }
+function showGroup(g){
+  $('#wfs').querySelectorAll('.wftabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.g === String(g)));
+  $('#wfs').querySelectorAll('.wfrow').forEach(r => r.hidden = r.dataset.g !== String(g));
+}
+function pickWorkflow(id){
+  const r = document.querySelector(`input[name=wf][value="${id}"]`);
+  if (r){ r.checked = true; showGroup(r.closest('.wfrow').dataset.g); }
+}
 
 /* ── 狀態 ── */
 async function refreshState(){
@@ -304,6 +383,7 @@ async function loadReq(name, keepSelection){
   $('#chat-title').textContent = name;
   $('#btn-reset').hidden = !S.reqData.has_session;
   renderLog(); renderArtifacts(keepSelection); renderSync(); updateComposer();
+  if (typeof TAB !== 'undefined' && TAB === 'backend' && BE.view === 'progress') renderProgress();
 }
 function renderSync(){
   const el = $('#pv-sync'); const st = S.reqData?.stale || [];
@@ -333,11 +413,17 @@ function renderLog(){
     html += `<div class="msg ai"><div class="body">${md(m.text) || '<p class="meta">（沒有文字回覆）</p>'}</div>
       ${tools.length ? `<details class="acts"><summary>做了 ${tools.length} 個動作</summary>${tools.map(actLine).join('')}</details>` : ''}
       ${m.denials?.length ? `<div class="denied">有 ${m.denials.length} 個動作被權限擋下：${esc(m.denials.slice(0,4).join('、'))}。需要的話，把它加進 .pm-console/config.json 的 allowed_tools。</div>` : ''}
-      <div class="meta${m.ok===false?' bad':''}">${m.ok===false?'未完成 · ':''}${m.seconds!=null?dur(m.seconds):''}${m.cost!=null?` · 用量約當 US$${Number(m.cost).toFixed(2)}`:''}</div></div>`;
+      <div class="meta${m.ok===false?' bad':''}">${m.ok===false?'未完成 · ':''}${m.seconds!=null?dur(m.seconds):''}${m.cost!=null?` · 用量約當 US$${Number(m.cost).toFixed(2)}`:''}${m.base && !m.reverted && m === msgs[msgs.length-1] ? '<button class="linkbtn revert" data-revert>退回這一輪</button>' : ''}</div></div>`;
   }
   if (S.live && S.live.req === S.req) html += liveHtml();
   const log = $('#log'); const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   log.innerHTML = html;
+  const rv = log.querySelector('[data-revert]');
+  if (rv) rv.onclick = async () => {
+    if (!confirm('把這一輪的修改全部還原？\n\n會用「還原提交」抵銷這一輪的 git 提交（歷史保留），並丟棄之後尚未提交的修改與新增檔案。')) return;
+    try{ const r = await api('/api/revert', {req: S.req}); await loadReq(S.req, true); if (r.touched_db) switchTab('backend'); }
+    catch(e){ alert(e.message); }
+  };
   if (atBottom || S.live) log.scrollTop = log.scrollHeight;
 }
 function liveHtml(){
@@ -456,6 +542,226 @@ $('#pv-select').onchange = e => showFrame(S.artifacts[+e.target.value]);
 $('#btn-reload').onclick = () => { const f = $('#pv-body iframe'); if (f){ f.src = f.dataset.src.replace(/t=\d+/, 't=' + Date.now()); } };
 $('#btn-open').onclick = () => { const it = S.artifacts.find(a => a.rel === S.selected); if (it) window.open(it.full, '_blank', 'noopener'); };
 
+/* ── 右欄分頁 ── */
+let TAB = 'docs';
+function switchTab(tab){
+  TAB = tab;
+  document.querySelectorAll('.pv-tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  $('#tab-docs').hidden = tab !== 'docs'; $('#tab-backend').hidden = tab !== 'backend';
+  if (tab === 'backend') beRefresh(true);
+}
+document.querySelectorAll('.pv-tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+/* ── 後端 ── */
+const BE = {view: 'progress', st: null, logFrom: {supabase: 0, api: 0}, logs: [], catalog: null, apiOut: null, fnOut: {}};
+async function beRefresh(render){
+  try{ BE.st = await api('/api/dev/state'); }catch(e){ return; }
+  renderSbPill();
+  if (TAB === 'backend' && render) renderBackend();
+  else if (TAB === 'backend') renderBeTop();
+}
+function sbReady(){ const e = BE.st?.env || {}; return e.docker_running && e.supabase_cli; }
+function renderSbPill(){
+  const st = BE.st; if (!st) return;
+  const sb = st.supabase || {};
+  let dot = '', text = 'Supabase 未啟動';
+  if (st.busy){ dot = 'warn'; text = `Supabase ${st.busy}中…`; }
+  else if (sb.running){ dot = 'ok'; text = 'Supabase 執行中'; }
+  else if (!sbReady()){ dot = 'bad'; text = '後端環境未就緒'; }
+  $('#st-sb').innerHTML = `<button class="pill" id="btn-sb" title="${sb.running ? '點一下停止' : '點一下啟動'}"><span class="dot ${dot}"></span>${text}</button>`;
+  $('#btn-sb').onclick = async () => {
+    if (BE.st.busy) return;
+    if (!sbReady()){ switchTab('backend'); return; }
+    if (sb.running && !confirm('停止本機 Supabase？資料會保留，下次啟動還在。')) return;
+    await beService(sb.running ? 'stop' : 'start');
+  };
+}
+async function beService(action){
+  try{ await api('/api/dev/service', {service: 'supabase', action}); BE.view = 'logs'; switchTab('backend'); }
+  catch(e){ alert(e.message); }
+}
+$('#be-reset').onclick = async () => {
+  if (!confirm('重置測試資料？\n\n本機資料庫會依遷移檔與 seed.sql 重建，你在工作台建立的測試帳號和手動新增的資料都會清空。正式環境不受影響。')) return;
+  await beService('reset');
+};
+function renderBeTop(){
+  const st = BE.st || {}; const id = st.identity || {type: 'anon'};
+  const opts = [['anon', '', '匿名（未登入）'], ['service', '', '管理權限（略過權限規則）'], ...(st.accounts || []).map(a => ['user', a.email, `${a.email}${a.role ? '（' + a.role + '）' : ''}`])];
+  const cur = id.type === 'user' ? 'user|' + id.email : id.type + '|';
+  $('#be-ident').innerHTML = opts.map(([t, e, l]) => `<option value="${esc(t + '|' + e)}" ${t + '|' + e === cur ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  const sb = st.supabase || {};
+  $('#be-summary').innerHTML = sb.running ? `<span class="dot ok"></span>本機執行中` : st.busy ? `<span class="dot warn"></span>${esc(st.busy)}中…` : '<span class="dot"></span>未啟動';
+  $('#be-reset').disabled = !sb.running || !!st.busy;
+}
+$('#be-ident').onchange = async e => {
+  const [type, email] = e.target.value.split('|');
+  try{ await api('/api/dev/identity', {type, email}); await beRefresh(); }catch(err){ alert(err.message); }
+};
+document.querySelectorAll('#be-nav button').forEach(b => b.onclick = () => { BE.view = b.dataset.view; renderBackend(); });
+
+function setupCard(){
+  const e = BE.st?.env || {}; const sb = BE.st?.supabase || {};
+  const ok = v => v ? '✅' : '⬜';
+  if (BE.st?.busy) return `<div class="be-pad"><div class="be-card"><strong>Supabase ${esc(BE.st.busy)}中…</strong><p>第一次啟動要下載映像檔，可能要好幾分鐘。進度在「日誌」。</p></div></div>`;
+  return `<div class="be-pad"><div class="be-card">
+    <strong>${sbReady() ? '本機 Supabase 還沒啟動' : '先把後端環境準備好'}</strong>
+    <ol>
+      <li>${ok(e.docker)} 安裝 Docker Desktop：到 <code>docker.com</code> 下載 Mac 版</li>
+      <li>${ok(e.docker_running)} 打開 Docker Desktop，等左下角顯示執行中</li>
+      <li>${ok(e.supabase_cli)} 安裝 Supabase 指令：終端機執行 <code>brew install supabase/tap/supabase</code></li>
+      <li>${ok(e.architecture)} 系統設計：選「系統」→「系統設計」產出 <code>ARCHITECTURE.md</code>（建議，後端依它建表）</li>
+      <li>${ok(sb.running)} 啟動：${sbReady() ? '<button class="btn primary" id="be-start">啟動 Supabase</button>' : '前三項完成後這裡會出現啟動按鈕'}</li>
+    </ol>
+    <p style="color:var(--muted);font-size:12.5px;margin:12px 0 0">都在你的電腦上執行，和正式環境無關。每個產品專案用各自的連接埠，可以同時開。</p>
+  </div></div>`;
+}
+function frameView(url, label){
+  if (!url) return `<div class="be-pad">這個功能要等 Supabase 啟動後才能用。</div>`;
+  return `<div class="be-bar">${esc(label)}<span style="flex:1"></span><a class="linkbtn" href="${esc(url)}" target="_blank" rel="noopener">新分頁開啟</a></div><iframe src="${esc(url)}" title="${esc(label)}"></iframe>`;
+}
+async function renderBackend(){
+  renderBeTop();
+  document.querySelectorAll('#be-nav button').forEach(b => b.setAttribute('aria-current', b.dataset.view === BE.view));
+  const v = $('#be-view'); const sb = BE.st?.supabase || {};
+  v.className = 'be-view';
+  const needRun = ['db', 'auth', 'mail', 'files', 'api'].includes(BE.view);
+  if (BE.view === 'logs') return renderLogs(true);
+  if (needRun && !sb.running){ v.innerHTML = setupCard(); bindSetup(); return; }
+  if (BE.view === 'db'){ v.className = 'be-view frame'; v.innerHTML = frameView(sb.studio && sb.studio + '/project/default/editor', '資料庫（Supabase 管理介面）'); return; }
+  if (BE.view === 'files'){ v.className = 'be-view frame'; v.innerHTML = frameView(sb.studio && sb.studio + '/project/default/storage/buckets', '檔案儲存'); return; }
+  if (BE.view === 'mail'){ v.className = 'be-view frame'; v.innerHTML = frameView(sb.mail, '測試信箱：註冊驗證信、重設密碼信都會寄到這裡，不會真的寄出'); return; }
+  if (BE.view === 'progress') return renderProgress();
+  if (BE.view === 'auth') return renderAuth();
+  if (BE.view === 'fn') return renderFn();
+  if (BE.view === 'api') return renderApi();
+}
+function bindSetup(){ const b = $('#be-start'); if (b) b.onclick = () => beService('start'); }
+
+async function renderProgress(){
+  const v = $('#be-view');
+  if (!S.req){ v.innerHTML = '<div class="be-pad">先在左邊選一個需求。</div>'; return; }
+  v.innerHTML = '<div class="be-pad">讀取中…</div>';
+  let p; try{ p = await api('/api/dev/progress?req=' + encodeURIComponent(S.req)); }catch(e){ v.innerHTML = `<div class="be-pad">${esc(e.message)}</div>`; return; }
+  if (!p.manifest){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>這個需求還沒有技術規格清單</strong><p>選「系統」→「技術規格」產出技術規格，開頭的 manifest 會列出要建的資料表、函式、畫面，這裡就能對照進度。</p></div></div>`; return; }
+  const label = {done: '✓ 已建立', todo: '✗ 尚未建立', later: '之後的階段', unknown: '啟動後才能確認'};
+  const back = p.items.filter(i => i.state !== 'later'), later = p.items.filter(i => i.state === 'later');
+  const done = back.filter(i => i.state === 'done').length;
+  v.innerHTML = `<div class="be-pad">
+    ${!p.running ? setupCard().replace('<div class="be-pad">', '<div style="margin-bottom:16px">') : ''}
+    <h3>「${esc(S.req)}」後端 ${done} / ${back.length}</h3>
+    ${back.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th></tr></thead><tbody>${back.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state}">${label[i.state]}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列後端項目。</p>'}
+    ${p.error ? `<p class="st-todo">${esc(p.error)}</p>` : ''}
+    ${later.length ? `<h3>APP 與網站（第二、三階段）</h3><table class="be"><tbody>${later.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-later">之後的階段</td></tr>`).join('')}</tbody></table>` : ''}
+    <h3>資料庫遷移檔（${p.migrations.length}）</h3>
+    ${p.migrations.length ? `<table class="be"><tbody>${p.migrations.slice(-8).reverse().map(m => `<tr><td>${esc(m)}</td></tr>`).join('')}</tbody></table>` : '<p>還沒有。選「開發」→「後端」開始。</p>'}
+  </div>`;
+  bindSetup();
+}
+
+async function renderAuth(){
+  const v = $('#be-view'); const accs = BE.st?.accounts || [];
+  v.innerHTML = `<div class="be-pad">
+    <h3>建立測試帳號</h3>
+    <div class="be-form">
+      <input id="acc-email" placeholder="demo1@example.com" size="22" aria-label="信箱">
+      <input id="acc-pass" placeholder="密碼（留空自動產生）" size="18" aria-label="密碼">
+      <input id="acc-role" placeholder="角色，例如 owner、clinic、admin" size="24" aria-label="角色">
+      <button class="btn primary" id="acc-create">建立</button>
+    </div>
+    <p style="color:var(--muted);font-size:12.5px;margin:0 0 6px">建立的帳號已通過信箱驗證，可以直接登入 App 或網站；角色寫進 user_metadata.role。上方「目前身分」可以切換成這些帳號，API 測試台與後端函式就會用它的身分。</p>
+    <h3>工作台的測試帳號（${accs.length}）</h3>
+    ${accs.length ? `<table class="be"><thead><tr><th>信箱</th><th>密碼</th><th>角色</th><th></th></tr></thead><tbody>${accs.map(a => `<tr><td>${esc(a.email)}</td><td>${esc(a.password)}</td><td>${esc(a.role)}</td><td style="white-space:nowrap"><button class="linkbtn" data-copy="${esc(a.email + '\n' + a.password)}">複製帳密</button> · <button class="linkbtn" data-as="${esc(a.email)}">切換成此身分</button></td></tr>`).join('')}</tbody></table>` : '<p>還沒有。</p>'}
+    <h3>所有使用者</h3><div id="acc-all">讀取中…</div>
+    <p style="margin-top:12px"><a class="linkbtn" href="${esc((BE.st.supabase.studio || '') + '/project/default/auth/users')}" target="_blank" rel="noopener">在 Supabase 管理介面管理使用者</a></p>
+  </div>`;
+  $('#acc-create').onclick = async () => {
+    try{
+      const r = await api('/api/dev/account', {email: $('#acc-email').value, password: $('#acc-pass').value, role: $('#acc-role').value.trim()});
+      await beRefresh(); renderAuth(); toast(`已建立 ${r.email}`);
+    }catch(e){ alert(e.message); }
+  };
+  v.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast('已複製帳號密碼'); });
+  v.querySelectorAll('[data-as]').forEach(b => b.onclick = async () => { await api('/api/dev/identity', {type: 'user', email: b.dataset.as}).catch(e => alert(e.message)); await beRefresh(); toast('已切換身分'); });
+  try{
+    const r = await api('/api/dev/users');
+    $('#acc-all').innerHTML = r.users.length ? `<table class="be"><thead><tr><th>信箱</th><th>角色</th><th>已驗證</th><th>最近登入</th></tr></thead><tbody>${r.users.map(u => `<tr><td>${esc(u.email)}${u.test_account ? '（工作台）' : ''}</td><td>${esc(u.role)}</td><td>${u.confirmed ? '是' : '否'}</td><td>${esc((u.last_sign_in || '').slice(0, 16).replace('T', ' '))}</td></tr>`).join('')}</tbody></table>` : '<p>還沒有使用者。</p>';
+  }catch(e){ $('#acc-all').textContent = e.message; }
+}
+
+function renderFn(){
+  const v = $('#be-view'); const fns = BE.st?.functions || [];
+  if (!fns.length){ v.innerHTML = '<div class="be-pad"><div class="be-card"><strong>還沒有後端函式</strong><p>技術規格列了 Edge Function 的話，選「開發」→「後端」建好後會出現在這裡。排程類的函式（例如疫苗提醒）可以在這裡「立即執行」，不用等排程時間。</p></div></div>'; return; }
+  v.innerHTML = `<div class="be-pad"><p style="color:var(--muted);font-size:12.5px;margin:0 0 10px">用上方的「目前身分」呼叫。排程函式在這裡按「立即執行」就能馬上測。</p>${fns.map(f => `
+    <div style="margin-bottom:18px"><h3>${esc(f)}</h3>
+      <textarea data-fnbody="${esc(f)}" aria-label="${esc(f)} 的請求內容">${esc(BE.fnOut[f]?.body || '{}')}</textarea>
+      <div style="margin-top:6px"><button class="btn primary" data-fnrun="${esc(f)}">立即執行</button></div>
+      ${BE.fnOut[f]?.res ? resultHtml(BE.fnOut[f].res) : ''}</div>`).join('')}</div>`;
+  v.querySelectorAll('[data-fnrun]').forEach(b => b.onclick = async () => {
+    const name = b.dataset.fnrun, body = v.querySelector(`[data-fnbody="${name}"]`).value;
+    b.disabled = true;
+    try{ BE.fnOut[name] = {body, res: await api('/api/dev/function', {name, body})}; }catch(e){ BE.fnOut[name] = {body, res: {error: e.message}}; }
+    renderFn();
+  });
+}
+function resultHtml(r){
+  if (r.error) return `<pre class="be-out st-todo">${esc(r.error)}</pre>`;
+  const cls = r.status >= 500 ? 's500' : r.status >= 400 ? 's400' : 's200';
+  return `<div style="margin-top:8px;font-size:12.5px"><span class="be-status ${cls}">${r.status}</span> · ${r.ms} ms · 身分：${esc(r.identity)}${r.headers['Content-Range'] || r.headers['content-range'] ? ' · 範圍 ' + esc(r.headers['Content-Range'] || r.headers['content-range']) : ''}</div><pre class="be-out">${esc(r.body)}</pre>`;
+}
+
+async function renderApi(){
+  const v = $('#be-view');
+  if (!BE.catalog){ try{ BE.catalog = await api('/api/dev/catalog'); }catch(e){ BE.catalog = {tables: [], rpc: [], functions: []}; } }
+  const c = BE.catalog, a = BE.apiOut || {method: 'GET', path: c.tables[0] ? `/rest/v1/${c.tables[0]}?select=*&limit=20` : '/rest/v1/', body: ''};
+  const sug = [...c.tables.map(t => `/rest/v1/${t}?select=*&limit=20`), ...c.rpc.map(r => `/rest/v1/rpc/${r}`), ...c.functions.map(f => `/functions/v1/${f}`), '/auth/v1/user', '/storage/v1/bucket'];
+  v.innerHTML = `<div class="be-pad">
+    <div class="be-form">
+      <select id="api-method" aria-label="方法">${['GET','POST','PATCH','PUT','DELETE'].map(m => `<option ${m === a.method ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <input id="api-path" list="api-sug" value="${esc(a.path)}" style="flex:1;min-width:260px" aria-label="路徑">
+      <datalist id="api-sug">${sug.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+      <button class="btn primary" id="api-send">送出</button>
+      <button class="btn" id="api-refresh" title="重新讀取資料表與函式清單">更新清單</button>
+    </div>
+    <textarea id="api-body" placeholder='POST／PATCH 的 JSON 內容，例如 {"name":"小灰"}' aria-label="請求內容">${esc(a.body)}</textarea>
+    <p style="color:var(--muted);font-size:12.5px;margin:6px 0 0">用上方「目前身分」送出，會套用資料表的權限規則（管理權限除外）。資料表 ${c.tables.length} 張、資料庫函式 ${c.rpc.length} 個、後端函式 ${c.functions.length} 個。</p>
+    ${a.res ? resultHtml(a.res) : ''}
+  </div>`;
+  $('#api-send').onclick = async () => {
+    BE.apiOut = {method: $('#api-method').value, path: $('#api-path').value.trim(), body: $('#api-body').value};
+    $('#api-send').disabled = true;
+    try{ BE.apiOut.res = await api('/api/dev/request', BE.apiOut); }catch(e){ BE.apiOut.res = {error: e.message}; }
+    renderApi();
+  };
+  $('#api-refresh').onclick = () => { BE.catalog = null; renderApi(); };
+}
+
+async function renderLogs(reset){
+  const v = $('#be-view');
+  if (reset){ BE.logs = []; BE.logFrom = {supabase: 0, api: 0}; v.innerHTML = '<div class="be-bar">Supabase 啟動／停止／重置的輸出，以及 API 測試台的請求紀錄<span style="flex:1"></span><button class="linkbtn" id="log-clear">清除畫面</button></div><pre class="be-log" id="be-log"></pre>'; $('#log-clear').onclick = () => { BE.logs = []; $('#be-log').textContent = ''; }; }
+  for (const svc of ['supabase', 'api']){
+    try{
+      const r = await api(`/api/dev/logs?service=${svc}&from=${BE.logFrom[svc]}`);
+      BE.logFrom[svc] = r.total; BE.logs.push(...r.items.map(x => ({...x, svc})));
+    }catch(e){}
+  }
+  BE.logs.sort((x, y) => x.t - y.t);
+  const el = $('#be-log'); if (!el) return;
+  const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 60;
+  el.textContent = BE.logs.map(x => `${new Date(x.t * 1000).toLocaleTimeString('zh-TW', {hour12: false})}  ${x.svc === 'api' ? '[API] ' : ''}${x.text}`).join('\n') || '（還沒有紀錄）';
+  if (atBottom || reset) v.scrollTop = v.scrollHeight;
+}
+function toast(msg){
+  let t = $('#toast'); if (!t){ t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); t.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;z-index:9'; document.body.appendChild(t); }
+  t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2600);
+}
+setInterval(async () => {
+  const wasBusy = BE.st?.busy;
+  if (TAB === 'backend' || wasBusy || !BE.st){ await beRefresh(false); }
+  if (TAB === 'backend' && BE.view === 'logs') renderLogs(false);
+  if (TAB === 'backend' && wasBusy && !BE.st?.busy && BE.view !== 'logs') renderBackend();
+}, 4000);
+setInterval(() => { if (TAB !== 'backend' && !BE.st?.busy) beRefresh(false); }, 20000);
+
 /* ── 啟動 ── */
 (async () => {
   await refreshState();
@@ -463,6 +769,7 @@ $('#btn-open').onclick = () => { const it = S.artifacts.find(a => a.rel === S.se
   const reqs = S.state?.reqs || [];
   const pick = S.state?.run && !S.state.run.done ? S.state.run.req : (reqs.find(r => r.name === saved) ? saved : reqs[0]?.name);
   if (pick) selectReq(pick);
+  beRefresh(false);
   setInterval(() => { if (!S.live) refreshState(); }, 8000);
 })();
 </script>

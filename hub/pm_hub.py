@@ -196,6 +196,19 @@ class Handler(BaseHTTPRequestHandler):
                 data["projects"].append({"path": target, "added": time.time()})
                 write_json(REGISTRY, data)
             return self._send(200, {"ok": True})
+        if path == "/api/update-all":
+            installer = HERE.parent / "install.py"
+            if not installer.is_file():
+                return self._send(500, {"error": "找不到 install.py，總覽要從 pm-studio 資料夾啟動。"})
+            try:
+                r = subprocess.run([sys.executable, str(installer), "--all"], capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace", timeout=900, stdin=subprocess.DEVNULL)
+            except subprocess.TimeoutExpired:
+                return self._send(500, {"error": "更新逾時"})
+            running = [p.get("path") for p in registry()["projects"]
+                       if isinstance(p, dict) and console_url(Path(p.get("path", "")))]
+            return self._send(200, {"ok": r.returncode == 0, "output": (r.stdout + r.stderr)[-6000:],
+                                    "running": running})
         if path == "/api/remove":
             data = registry()
             data["projects"] = [p for p in data["projects"] if not (isinstance(p, dict) and p.get("path") == target)]

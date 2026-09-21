@@ -15,7 +15,7 @@ description: 技術規格工作流：從 PRD 與原型產出給工程師的技�
 ## 前置
 
 1. 讀 `[需求名]/需求文件/[需求名]-PRD.html`（必要）與 `[需求名]/原型/`（必要），有流程圖一併讀。
-2. 讀 `PRODUCT.md` 的平台與限制段。
+2. 讀 `PRODUCT.md` 的平台與限制段，以及 `ARCHITECTURE.md`（技術組合、權限表、資料模型、慣例）。沒有 `ARCHITECTURE.md` → 先走 `pm-sysdesign.md`；Spec 依它寫，不自行決定技術棧。
 3. **看專案裡有沒有程式碼。** 有（例如有 `package.json`、`src/`、`app/`、資料庫 schema、API 路由）→ 以現有技術棧與命名慣例為準，Spec 描述「要在現有系統改什麼」。沒有 → 問使用者一次技術棧；使用者不知道或還沒定，就寫成與技術棧無關的形式（資料實體、狀態、介面契約），實作細節標「待工程確認」。
 4. **不編造。** 沒有依據的數字（效能指標、配額、保留天數）一律寫「待工程確認」或「待產品確認」，不要自己填一個合理的值。
 
@@ -29,7 +29,28 @@ description: 技術規格工作流：從 PRD 與原型產出給工程師的技�
 
 依需求實際需要取捨章節，沒有內容的章節整章不寫（不留「無」）。
 
+**開頭的 `manifest` 必填**，工作台用它對照實際程式顯示開發進度：
+
+- 每個鍵一行，值是**單行**中括號清單，項目用英文逗號分隔；沒有就寫 `[]`。
+- `tables`：本需求新增或修改的資料表（英文表名，與 `ARCHITECTURE.md` 一致）。
+- `functions`：Edge Function 名稱（`supabase/functions/` 下的資料夾名）。`rpc`：資料庫函式名稱。`buckets`：檔案儲存 bucket。
+- `app_screens`：APP 畫面代號（與原型的 `#page-id` 對應）。
+- `web_admin`／`web_partner`／`web_site`：三個網站各自的頁面路由。
+- 內文和 `manifest` 必須一致；變更時兩邊一起改。
+
 ```markdown
+---
+manifest:
+  tables: [pets, vaccinations]
+  functions: [vaccine-reminder]
+  rpc: [get_due_vaccinations]
+  buckets: [pet-photos]
+  app_screens: [home, pet-detail, vaccination-list]
+  web_admin: [/pets, /pets/[id]]
+  web_partner: []
+  web_site: []
+---
+
 # [需求名] · 技術規格
 
 > 對應 PRD：[需求名]/需求文件/[需求名]-PRD.html · 最後更新 YYYY-MM-DD

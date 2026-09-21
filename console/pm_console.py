@@ -33,6 +33,9 @@ SCRIPTS = Path(__file__).resolve().parent
 ROOT = Path(os.environ.get("PM_CONSOLE_ROOT") or SCRIPTS.parent).resolve()
 DATA = ROOT / ".pm-console"
 UI_FILE = SCRIPTS / "pm_console.html"
+sys.path.insert(0, str(SCRIPTS))
+import pm_dev  # noqa: E402  與工作台同在 scripts/
+pm_dev.init(ROOT, DATA)
 
 # 產物子資料夾名稱，須與 studio-pm-workflow匯出服務的 WRITABLE_SUBDIR_NAMES 一致。
 ARTIFACT_DIRS = ["需求挖掘", "需求文件", "原型", "流程圖", "原型驗證", "技術規格", "驗收清單", "資料分析", "上線",
@@ -57,28 +60,40 @@ DEFAULT_CONFIG = {
         "Bash(*/.claude/skills/impeccable/scripts/impeccable:*)", "Bash(grep:*)", "Bash(rm:*)",
         "Bash(git status:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)",
         "Task", "WebSearch", "WebFetch",
+        "Bash(supabase status:*)", "Bash(supabase migration:*)", "Bash(supabase functions new:*)",
+        "Bash(supabase gen types:*)", "Bash(supabase db lint:*)", "Bash(supabase db diff:*)",
+        "Bash(supabase test db:*)", "Bash(supabase init:*)", "Bash(deno:*)",
     ],
     "use_subscription": True,
     "auto_start_export_service": True,
     "language_rule": "文件正文、原型介面文案與給使用者的回覆一律使用繁體中文（台灣用語）。",
     "workflows": [
-        {"id": "prd", "group": "產出", "label": "PRD＋原型", "file": ".agents/workflows/pm-prd.md"},
-        {"id": "demand", "group": "產出", "label": "需求挖掘", "file": ".agents/workflows/pm-demand.md"},
-        {"id": "spec", "group": "產出", "label": "技術規格", "file": ".agents/workflows/pm-spec.md"},
-        {"id": "acceptance", "group": "產出", "label": "驗收清單", "file": ".agents/workflows/pm-acceptance.md"},
-        {"id": "data", "group": "產出", "label": "資料分析", "file": ".agents/workflows/pm-data-analysis.md"},
-        {"id": "launch", "group": "產出", "label": "上線包", "file": ".agents/workflows/pm-launch.md"},
+        {"id": "prd", "group": "產品", "label": "PRD＋原型", "file": ".agents/workflows/pm-prd.md"},
+        {"id": "demand", "group": "產品", "label": "需求挖掘", "file": ".agents/workflows/pm-demand.md"},
+        {"id": "data", "group": "產品", "label": "資料分析", "file": ".agents/workflows/pm-data-analysis.md"},
+        {"id": "launch", "group": "產品", "label": "上線包", "file": ".agents/workflows/pm-launch.md"},
         {"id": "design", "group": "設計", "label": "設計方向", "file": ".agents/workflows/pm-design.md",
          "instruction": "走流程 A：檢查並建立或修改 PRODUCT.md 與 DESIGN.md。使用者若貼了網址或截圖，用 hallmark study。"},
         {"id": "review", "group": "設計", "label": "檢查原型", "file": ".agents/workflows/pm-design.md",
          "instruction": "走流程 C：對本需求的原型 HTML 先 hallmark audit，違反 DESIGN.md 的直接修並再 audit；使用者要求時再 impeccable critique 或分項命令。"},
+        {"id": "validate", "group": "設計", "label": "原型驗證", "file": ".agents/workflows/pm-validate.md"},
         {"id": "motion", "group": "設計", "label": "加動效", "file": ".agents/workflows/pm-design.md",
          "instruction": "走流程 B 第 5 步：用 gsap-* skill 為本需求原型加動效，強度依 DESIGN.md，尊重 prefers-reduced-motion。"},
         {"id": "hifi", "group": "設計", "label": "高保真", "file": ".agents/workflows/pm-design.md",
          "instruction": "走流程 D：pencilplaybook + Pencil，token 從 DESIGN.md 取值；Pencil 未安裝則說明並停止。"},
+        {"id": "sysdesign", "group": "系統", "label": "系統設計", "file": ".agents/workflows/pm-sysdesign.md"},
+        {"id": "spec", "group": "系統", "label": "技術規格", "file": ".agents/workflows/pm-spec.md"},
+        {"id": "backend", "group": "開發", "label": "後端", "file": ".agents/workflows/pm-backend.md"},
+        {"id": "acceptance", "group": "QA", "label": "驗收清單", "file": ".agents/workflows/pm-acceptance.md"},
         {"id": "change", "group": "調整", "label": "變更", "file": ".agents/workflows/pm-change.md"},
-        {"id": "validate", "group": "調整", "label": "原型驗證", "file": ".agents/workflows/pm-validate.md"},
         {"id": "free", "group": "調整", "label": "自由指令", "file": ""},
+    ],
+    # 這兩組的每一輪執行前會自動 git 快照，執行後可「退回這一輪」
+    "snapshot_groups": ["系統", "開發"],
+    "denied_tools": [
+        "Bash(supabase link:*)", "Bash(supabase db push:*)", "Bash(supabase functions deploy:*)",
+        "Bash(supabase secrets set:*)", "Bash(supabase projects:*)", "Bash(supabase login:*)",
+        "Bash(git push:*)", "Bash(git reset:*)", "Bash(git checkout:*)", "Bash(git clean:*)",
     ],
 }
 
@@ -120,7 +135,7 @@ def load_config():
         w = by_id.pop(wid, None)
         if w is None:
             w = dict(dw); changed = True
-        if "group" not in w:
+        if w.get("group") != dw["group"]:
             w["group"] = dw["group"]; changed = True
         ordered.append(w)
     for w in by_id.values():  # 使用者自訂的按鈕
@@ -134,6 +149,11 @@ def load_config():
         if t not in tools:
             tools.append(t); changed = True
     merged["allowed_tools"] = tools
+    denied = merged.get("denied_tools") or []
+    for t in DEFAULT_CONFIG["denied_tools"]:
+        if t not in denied:
+            denied.append(t); changed = True
+    merged["denied_tools"] = denied
     if changed:
         atomic_write(path, json.dumps(merged, ensure_ascii=False, indent=2))
     return merged
@@ -348,6 +368,7 @@ def compose_prompt(cfg, req, workflow, message, first_turn):
         f"- {cfg.get('language_rule', '')}",
         "- 你無法在執行中等待回答。需要使用者確認時，把問題整理成編號清單作為本輪最後的回覆並結束，使用者會在下一則訊息回答。",
         "- 不要啟動常駐服務，也不要執行 install_launcher.sh；截圖匯出由使用者在預覽中操作。",
+        "- 需要跑超過一行的 Python 時，先用 Write 寫成 .pm-console/tmp/ 底下的 .py 檔再用 python3 執行，不要用 python3 -c \"多行程式\"：無頭模式下 Claude Code 的內建安全檢查會把含換行與 # 的引號指令擋掉，而且無法用 allowed_tools 放行。指令也不要用 cd 開頭，你已經在專案根目錄。",
         "- 畫任何原型前先讀專案根目錄 DESIGN.md；沒有就先走 pm-design.md 流程 A2。設計工具分工見 .agents/workflows/pm-design.md，同一件事不要跑兩套。",
         "- 交付物只留最新版：不寫版本記錄或修改紀錄、不留刪除線與「已修改」標記、不另存舊檔。任何調整都把受影響的文件一起改到一致（規則見 .agents/workflows/pm-change.md）。",
         f"- 使用者提供的原始材料（訪談逐字稿、客戶檔案、測試筆記）放在「{req}/素材/」；續接所需的現況寫在隱藏檔 .pm-workflow/context/{req}.md（覆寫，不累積）。",
@@ -358,6 +379,11 @@ def compose_prompt(cfg, req, workflow, message, first_turn):
     if workflow.get("file"):
         lines.append(f"- 本輪工作流：{workflow['label']}。請依照 `{workflow['file']}` 的規範執行"
                      + ("（開始前先完整閱讀它）。" if first_turn else "（若本對話已讀過可不必重讀）。"))
+    if workflow.get("group") in ("開發", "系統"):
+        st = pm_dev.public_status() if (ROOT / "supabase/config.toml").is_file() else {"running": False}
+        lines.append("- 開發環境：本機 Supabase " + (f"執行中（API {st.get('api')}，管理介面 {st.get('studio')}）" if st.get("running")
+                     else "沒有在執行。需要它時不要自己啟動，請使用者按工作台上方的「Supabase」。")
+                     + "只准操作本機，禁止連到任何遠端專案。本輪開始前工作台已做 git 快照，使用者可以一鍵退回。")
     if workflow.get("instruction"):
         lines.append(f"- 補充指示：{workflow['instruction']}")
     lines += ["", "［使用者訊息］", message.strip()]
@@ -369,6 +395,7 @@ def build_command(cfg, exe, session_id):
     atomic_write(settings, json.dumps({
         "disableAllHooks": bool(cfg.get("disable_hooks", True)),
         "permissions": {"allow": cfg.get("allowed_tools") or [],
+                        "deny": cfg.get("denied_tools") or [],
                         "defaultMode": cfg.get("permission_mode") or "acceptEdits"}
     }, ensure_ascii=False, indent=2))
     cmd = [exe, "-p", "--output-format", "stream-json", "--verbose",
@@ -416,6 +443,58 @@ def kill_tree(proc):
             pass
 
 
+def git(*args, timeout=60):
+    try:
+        r = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout)
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return -1, "", str(e)
+
+
+def git_snapshot(label):
+    """開發類工作前：工作區有未提交的變動就先提交一次，記下起點。回傳起點 commit 或 None。"""
+    if git("rev-parse", "--is-inside-work-tree")[1] != "true":
+        return None
+    if git("status", "--porcelain")[1]:
+        git("add", "-A")
+        code, _, err = git("commit", "-q", "-m", f"工作台自動快照（{label}前）")
+        if code != 0:
+            return None  # 多半是 git 還沒設定作者；不快照就不提供退回
+    code, head, _ = git("rev-parse", "HEAD")
+    return head if code == 0 else None
+
+
+def revert_last(req):
+    cur = CURRENT["run"]
+    if cur and not cur.done:
+        raise RuntimeError("還有工作在執行，等它結束再退回。")
+    path = chat_file(req)
+    log = read_json(path, {"req": req, "messages": []})
+    msgs = log["messages"]
+    if not msgs or msgs[-1].get("role") != "assistant" or not msgs[-1].get("base") or msgs[-1].get("reverted"):
+        raise RuntimeError("只能退回這個需求最近一輪的開發，而且那一輪之後沒有其他對話。")
+    base = msgs[-1]["base"]
+    _, head, _ = git("rev-parse", "HEAD")
+    _, changed, _ = git("diff", "--name-only", base)
+    commits = git("rev-list", f"{base}..HEAD")[1].split()
+    if commits:
+        code, _, err = git("revert", "--no-edit", f"{base}..HEAD", timeout=120)
+        if code != 0:
+            git("revert", "--abort")
+            raise RuntimeError("自動退回失敗（和之後的修改衝突），沒有變動任何檔案：" + err[:300])
+    git("checkout", "--", ".")
+    git("clean", "-fdq")
+    touched_db = any(f.startswith("supabase/migrations/") or f == "supabase/seed.sql" for f in changed.splitlines())
+    msgs[-1]["reverted"] = True
+    note = f"已退回上一輪（{len(commits)} 個提交以還原提交抵銷，git 歷史保留）。"
+    if touched_db:
+        note += "這一輪改過資料庫遷移或示範資料：到「後端」分頁按「重置測試資料」，本機資料庫才會回到退回後的狀態。"
+    msgs.append({"role": "divider", "text": note, "time": time.time()})
+    atomic_write(path, json.dumps(log, ensure_ascii=False, indent=1))
+    return {"ok": True, "note": note, "touched_db": touched_db}
+
+
 def start_run(cfg, req, workflow, message):
     exe = find_claude(cfg)
     if not exe:
@@ -425,6 +504,7 @@ def start_run(cfg, req, workflow, message):
     prompt = compose_prompt(cfg, req, workflow, message, first_turn=not session_id)
 
     run = Run(req, workflow)
+    run.base = git_snapshot(workflow["label"]) if workflow.get("group") in (cfg.get("snapshot_groups") or []) else None
     append_chat(req, {"role": "user", "text": message.strip(), "workflow": workflow["label"],
                       "time": time.time()})
 
@@ -508,7 +588,8 @@ def start_run(cfg, req, workflow, message):
         append_chat(req, {"role": "assistant", "text": answer, "ok": final.get("ok"),
                           "tools": tools[-60:], "denials": final.get("denials", []),
                           "cost": final.get("cost"), "time": time.time(),
-                          "seconds": round(time.time() - run.started)})
+                          "seconds": round(time.time() - run.started),
+                          **({"base": run.base} if getattr(run, "base", None) else {})})
         with run.cond:
             run.done = True
             run.events.append({"t": "end", "i": len(run.events)})
@@ -685,8 +766,30 @@ class Handler(BaseHTTPRequestHandler):
             if not secrets.compare_digest(q.get("token", ""), TOKEN):
                 return self._send(403, {"error": "token"})
             return self._stream(q.get("run", ""), int(q.get("from") or 0))
+        if path.startswith("/api/dev/"):
+            return self._dev_get(path[len("/api/dev/"):], q)
         if path.startswith("/files/"):
             return self._file(unquote(path[len("/files/"):]))
+        return self._send(404, {"error": "not found"})
+
+    def _dev_get(self, name, q):
+        try:
+            if name == "state":
+                return self._send(200, pm_dev.state())
+            if name == "logs":
+                items, total = pm_dev.logs(q.get("service", "supabase"), int(q.get("from") or 0))
+                return self._send(200, {"items": items, "total": total})
+            if name == "progress":
+                req = valid_req_name(q.get("req"))
+                import pm_sync  # noqa: E402
+                return self._send(200, pm_dev.progress(req, pm_sync.read_manifest) if req else {"items": []})
+            if name == "users":
+                return self._send(200, {"users": pm_dev.list_users()})
+            if name == "catalog":
+                api = pm_dev.openapi()
+                return self._send(200, {**api, "functions": pm_dev.functions()})
+        except (RuntimeError, ValueError, OSError) as e:
+            return self._send(409, {"error": str(e)})
         return self._send(404, {"error": "not found"})
 
     def _index(self):
@@ -806,6 +909,32 @@ class Handler(BaseHTTPRequestHandler):
                 run.stopped = True
                 kill_tree(run.proc)
             return self._send(200, {"ok": True})
+        if path == "/api/revert":
+            req = valid_req_name(body.get("req"))
+            if not req:
+                return self._send(400, {"error": "需求名稱不正確"})
+            try:
+                return self._send(200, revert_last(req))
+            except RuntimeError as e:
+                return self._send(409, {"error": str(e)})
+        if path.startswith("/api/dev/"):
+            name = path[len("/api/dev/"):]
+            try:
+                if name == "service":
+                    return self._send(200, {"ok": True, "action": pm_dev.service_action(
+                        body.get("service", ""), body.get("action", ""), project_id())})
+                if name == "account":
+                    return self._send(200, pm_dev.create_account(body.get("email"), body.get("password"), body.get("role", "")))
+                if name == "identity":
+                    return self._send(200, pm_dev.set_identity(body))
+                if name == "request":
+                    return self._send(200, pm_dev.proxy(body.get("method"), body.get("path"), body.get("body", ""),
+                                                        body.get("headers") or {}))
+                if name == "function":
+                    return self._send(200, pm_dev.run_function(body.get("name", ""), body.get("body", "")))
+            except (RuntimeError, ValueError, OSError) as e:
+                return self._send(409, {"error": str(e)})
+            return self._send(404, {"error": "not found"})
         if path == "/api/export/start":
             if export_service_alive():
                 return self._send(200, {"ok": True, "status": "running"})

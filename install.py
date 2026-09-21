@@ -64,11 +64,48 @@ def setup_git(root):
     print("   要推到 GitHub：git remote add origin <網址> && git push -u origin main（建議私人儲存庫）")
 
 
+def update_all(skip):
+    import json, os
+    home = Path(os.environ.get("PM_STUDIO_HOME") or (Path.home() / ".pm-studio"))
+    try:
+        items = json.loads((home / "projects.json").read_text(encoding="utf-8")).get("projects", [])
+    except Exception:
+        items = []
+    paths = [Path(p["path"]) for p in items if isinstance(p, dict) and p.get("path")]
+    if not paths:
+        print("專案總覽裡沒有登記任何專案。")
+        return 0
+    failed = []
+    for root in paths:
+        print(f"\n════════ {root} ════════")
+        if not root.is_dir():
+            print("找不到這個資料夾，略過。")
+            failed.append(str(root))
+            continue
+        for name, script in STEPS:
+            if name in skip:
+                continue
+            code = subprocess.call([sys.executable, str(script), "--project", str(root)])
+            if code != 0:
+                failed.append(f"{root}（{name}）")
+                break
+    print(f"\n更新完成：{len(paths) - len(failed)} / {len(paths)} 個專案。")
+    if failed:
+        print("未完成：" + "、".join(failed))
+    print("開著的工作台要關掉重開才會用到新版。")
+    return 1 if failed else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--project", required=True)
+    ap.add_argument("--project", help="要安裝或更新的產品專案資料夾")
+    ap.add_argument("--all", action="store_true", help="更新專案總覽裡登記的所有專案")
     ap.add_argument("--skip", nargs="*", default=[], choices=["工作流", "設計層", "工作台"])
     args = ap.parse_args()
+    if args.all:
+        return update_all(args.skip)
+    if not args.project:
+        ap.error("需要 --project 路徑，或用 --all 更新所有專案")
     root = Path(args.project).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     for name, script in STEPS:
