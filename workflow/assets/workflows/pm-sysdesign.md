@@ -86,6 +86,9 @@ services:
     url: http://127.0.0.1:{port}                      # 預覽／API 測試用的網址
     openapi: /openapi.json                            # 有的話，API 測試台會列出端點
     tools: [uv, python -m pytest]                     # 允許 Claude 執行的指令開頭
+    depends_on: [backend]                             # 啟動前要先開好的服務（例如 API 要等資料庫）
+    test: uv run pytest --junitxml=reports/junit.xml  # 跑測試的指令
+    test_report: reports/junit.xml                    # 測試報告（JUnit XML；可用 * 萬用字元或資料夾）
     env:                                              # 啟動時帶入的環境變數
       DATABASE_URL: "{SUPABASE_DB_URL}"
 ---
@@ -97,6 +100,8 @@ services:
 - `generic` 必須寫 `run`；有網頁或 API 的要寫 `url`。`run` 必須是**在本機跑、不會連到正式環境**的開發指令。
 - `env` 可用的變數：`{port}`、`{SUPABASE_URL}`、`{SUPABASE_ANON_KEY}`、`{SUPABASE_DB_URL}`、`{BACKEND_URL}`（第一個非 Supabase 後端的網址，沒有則為 Supabase 網址）、`{<服務 id 大寫>_URL}`。APP 在 Android 模擬器上執行時，工作台會自動把本機網址換成 `10.0.2.2`。
 - `tools` 只列開發需要的指令（安裝、測試、產生程式碼、資料庫遷移）。啟動開發伺服器的指令由工作台負責，會自動禁止 Claude 執行。
+- `depends_on`：這個服務需要誰先啟動（資料庫、另一個 API）。工作台啟動它時會自動先開好依賴的服務。
+- `test`／`test_report`：QA 分頁用來跑測試、讀結果。報告一律用 **JUnit XML**（幾乎所有測試工具都支援）。Flutter 與 Supabase 已內建，不用寫；其他服務沒寫就無法在 QA 分頁執行。
 - 不需要的部分不列（例如沒有網站就沒有 web 服務）。
 
 ### 內文

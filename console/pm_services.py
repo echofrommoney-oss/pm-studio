@@ -130,6 +130,9 @@ def services(project_id):
             "url": str(merged.get("url", "")).replace("{port}", str(port)),
             "openapi": merged.get("openapi", ""), "env": merged.get("env") or {}, "env_file": merged.get("env_file", ""),
             "tools": merged.get("tools") or [],
+            "test": merged.get("test", ""), "test_report": merged.get("test_report", ""),
+            "depends_on": [str(x) for x in (merged.get("depends_on") or [])] if isinstance(merged.get("depends_on"), list)
+                          else ([str(merged["depends_on"])] if merged.get("depends_on") else []),
         })
     return out
 
@@ -248,6 +251,9 @@ def start(project_id, sid, reinstall=False):
 
     def job():
         try:
+            if not _start_deps(project_id, svc, key):
+                run.state = "stopped"
+                return
             vars_ = dict(variables(project_id), PORT=str(svc["port"]))
             env = dict(os.environ, BROWSER="none", NEXT_TELEMETRY_DISABLED="1", PORT=str(svc["port"]),
                        FORCE_COLOR="0")
@@ -285,6 +291,59 @@ def start(project_id, sid, reinstall=False):
 
     threading.Thread(target=job, daemon=True).start()
     return run
+
+
+def _wait(check, timeout):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if check():
+            return True
+        time.sleep(2)
+    return False
+
+
+def _start_deps(project_id, svc, key, seen=None):
+    """依 depends_on 先把需要的服務開好（例如 api 要等 db）。"""
+    seen = seen or {svc["id"]}
+    for dep_id in svc.get("depends_on") or []:
+        if dep_id in seen:
+            continue
+        seen.add(dep_id)
+        dep = next((x for x in services(project_id) if x["id"] == dep_id), None)
+        if not dep:
+            pm_dev.log(key, f"⚠️ depends_on 寫了 {dep_id}，但 ARCHITECTURE.md 沒有這個服務，略過。")
+            continue
+        if dep["adapter"] == "supabase":
+            if pm_dev.supabase_status(force=True).get("running"):
+                continue
+            pm_dev.log(key, f"先啟動依賴的「{dep['label']}」…")
+            try:
+                pm_dev.service_action("supabase", "start", project_id)
+            except RuntimeError as e:
+                pm_dev.log(key, f"無法啟動「{dep['label']}」：{e}")
+                return False
+            if not _wait(lambda: not pm_dev.BUSY.get("supabase") and pm_dev.supabase_status(force=True).get("running"), 900):
+                pm_dev.log(key, f"「{dep['label']}」沒有啟動成功，看後端分頁的日誌。")
+                return False
+        elif dep["adapter"] == "flutter":
+            continue
+        else:
+            cur = RUNS.get(dep_id)
+            if cur and cur.state == "running":
+                continue
+            if not (cur and cur.state == "starting"):
+                pm_dev.log(key, f"先啟動依賴的「{dep['label']}」…")
+                try:
+                    start(project_id, dep_id)
+                except (RuntimeError, ValueError) as e:
+                    pm_dev.log(key, f"無法啟動「{dep['label']}」：{e}")
+                    return False
+            if not _wait(lambda: RUNS.get(dep_id) is not None and RUNS[dep_id].state in ("running", "stopped"), 300) \
+                    or RUNS[dep_id].state != "running":
+                pm_dev.log(key, f"「{dep['label']}」沒有啟動成功，看它的日誌。")
+                return False
+        pm_dev.log(key, f"✓ 依賴的「{dep['label']}」已就緒。")
+    return True
 
 
 def stop(sid):
@@ -471,6 +530,7 @@ def state(project_id):
         out.append({**{k: s[k] for k in ("id", "role", "adapter", "label", "dir", "url", "support", "openapi", "port")},
                     "exists": (ROOT / s["dir"]).is_dir() if s["dir"] else True,
                     "can_run": bool(s["run"]) or s["adapter"] in ("supabase", "flutter"),
+                    "depends_on": s["depends_on"], "testable": s["adapter"] in ("flutter", "supabase") or bool(s["test"]),
                     "run": {"state": r.state} if r else None})
     return {"services": out, "architecture": (ROOT / "ARCHITECTURE.md").is_file(),
             "declared": _pm_sync().read_stack(ROOT) is not None, "tools": tools}
@@ -482,6 +542,10 @@ def permission_rules(project_id):
     for s in services(project_id):
         for t in s["tools"]:
             allow.append(f"Bash({t}:*)")
+        if s.get("test"):
+            words = s["test"].split("{")[0].split()
+            if words:
+                allow.append(f"Bash({' '.join(words[:3])}:*)")
         if s["run"]:
             head = s["run"].split("{")[0].strip()
             words = head.split()

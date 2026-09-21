@@ -37,7 +37,9 @@ sys.path.insert(0, str(SCRIPTS))
 import pm_dev  # noqa: E402  與工作台同在 scripts/
 import pm_app  # noqa: E402
 import pm_services  # noqa: E402
+import pm_qa  # noqa: E402
 pm_dev.init(ROOT, DATA)
+pm_qa.init(ROOT, DATA)
 pm_app.init(ROOT, DATA)
 pm_services.init(ROOT, DATA)
 
@@ -95,12 +97,14 @@ DEFAULT_CONFIG = {
         {"id": "backend", "group": "開發", "label": "後端", "file": ".agents/workflows/pm-backend.md"},
         {"id": "app", "group": "開發", "label": "APP", "file": ".agents/workflows/pm-app.md"},
         {"id": "frontend", "group": "開發", "label": "前端", "file": ".agents/workflows/pm-frontend.md"},
+        {"id": "qa", "group": "QA", "label": "自動測試", "file": ".agents/workflows/pm-qa.md"},
+        {"id": "debug", "group": "QA", "label": "除錯", "file": ".agents/workflows/pm-debug.md"},
         {"id": "acceptance", "group": "QA", "label": "驗收清單", "file": ".agents/workflows/pm-acceptance.md"},
         {"id": "change", "group": "調整", "label": "變更", "file": ".agents/workflows/pm-change.md"},
         {"id": "free", "group": "調整", "label": "自由指令", "file": ""},
     ],
     # 這兩組的每一輪執行前會自動 git 快照，執行後可「退回這一輪」
-    "snapshot_groups": ["系統", "開發"],
+    "snapshot_groups": ["系統", "開發", "QA"],
     "denied_tools": [
         "Bash(supabase link:*)", "Bash(supabase db push:*)", "Bash(supabase functions deploy:*)",
         "Bash(supabase secrets set:*)", "Bash(supabase projects:*)", "Bash(supabase login:*)",
@@ -806,6 +810,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._dev_get(path[len("/api/dev/"):], q)
         if path.startswith("/api/app/"):
             return self._app_get(path[len("/api/app/"):], q)
+        if path == "/api/qa/state":
+            req = valid_req_name(q.get("req")) if q.get("req") else None
+            try:
+                return self._send(200, pm_qa.results(project_id(), req))
+            except Exception as e:
+                return self._send(409, {"error": str(e)})
+        if path == "/api/qa/file":
+            try:
+                data, ctype = pm_qa.file_bytes(unquote(q.get("path", "")))
+                return self._send(200, data, ctype)
+            except (ValueError, OSError):
+                return self._send(404, {"error": "not found"})
         if path == "/api/stack":
             try:
                 return self._send(200, pm_services.state(project_id()))
@@ -988,6 +1004,25 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 return self._send(200, revert_last(req))
             except RuntimeError as e:
+                return self._send(409, {"error": str(e)})
+        if path == "/api/qa/run":
+            try:
+                ids = body.get("ids") or []
+                if body.get("all"):
+                    ids = [s["id"] for s in pm_services.services(project_id()) if pm_qa.testable(s)]
+                if not ids:
+                    return self._send(400, {"error": "沒有可以跑測試的服務。請在「系統設計」替服務補上測試設定。"})
+                started = []
+                for sid in ids:
+                    try:
+                        pm_qa.run(project_id(), sid)
+                        started.append(sid)
+                    except RuntimeError as e:
+                        if len(ids) == 1:
+                            raise
+                        pm_dev.log("qa-" + sid, str(e))
+                return self._send(200, {"ok": True, "started": started})
+            except (RuntimeError, ValueError) as e:
                 return self._send(409, {"error": str(e)})
         if path.startswith("/api/svc/"):
             name = path[len("/api/svc/"):]

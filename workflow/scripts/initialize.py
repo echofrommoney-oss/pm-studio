@@ -63,6 +63,8 @@ MAPPING = [
     ("workflows/pm-backend.md",        ".agents/workflows/pm-backend.md",        CUSTOM),
     ("workflows/pm-app.md",            ".agents/workflows/pm-app.md",            CUSTOM),
     ("workflows/pm-frontend.md",       ".agents/workflows/pm-frontend.md",       CUSTOM),
+    ("workflows/pm-qa.md",             ".agents/workflows/pm-qa.md",             CUSTOM),
+    ("workflows/pm-debug.md",          ".agents/workflows/pm-debug.md",          CUSTOM),
     ("workflows/pm-validate.md",       ".agents/workflows/pm-validate.md",       CUSTOM),
     ("workflows/pm-launch.md",         ".agents/workflows/pm-launch.md",         CUSTOM),
     ("templates/prd-content.html",         "scripts/prd-content.html",                   CUSTOM),

@@ -54,6 +54,8 @@ Artifacts are organized **per requirement**: each requirement gets ONE top-level
 | Backend development with the stack chosen in ARCHITECTURE.md (Supabase has a dedicated section) | `.agents/workflows/pm-backend.md` | backend service dir |
 | APP development with the stack chosen in ARCHITECTURE.md (Flutter has a dedicated section) | `.agents/workflows/pm-app.md` | app service dir |
 | Web frontend development (admin, partner portal, marketing site…) with the chosen stack | `.agents/workflows/pm-frontend.md` | web service dirs |
+| Automated tests mapped to acceptance items (JUnit XML reports) | `.agents/workflows/pm-qa.md` | tests in each service; results in the console QA tab |
+| Debugging: reproduce → root cause → minimal fix → verify → commit | `.agents/workflows/pm-debug.md` | fix + regression test |
 | Any change to an existing requirement, "同步", out-of-date documents | `.agents/workflows/pm-change.md` | every affected document rewritten to the latest consistent version |
 | Usability test, prototype validation, test notes to synthesize | `.agents/workflows/pm-validate.md` | `[需求名]/原型驗證/[需求名]-測試腳本.md`, `-驗證結果.md` |
 | Release notes, launch checklist, landing page, store listing, pricing | `.agents/workflows/pm-launch.md` | `[需求名]/上線/` |

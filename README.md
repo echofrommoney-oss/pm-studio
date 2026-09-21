@@ -66,6 +66,27 @@ Chrome 擴充功能要手動載入一次（步驟在安裝後專案裡的 `設�
 
 **本機需要的工具依選型而定**：Supabase 要 Docker Desktop 與 `supabase` 指令；Flutter 要 Flutter SDK（iOS 另需 Xcode）；Node 類框架要 Node.js（建議再裝 pnpm）；其他技術依它自己的需求。
 
+## QA 與除錯
+
+- **QA → 自動測試**：Claude 依驗收清單與技術規格，用選定技術的主流測試工具寫測試。測試名稱帶 `[驗收 需求名:驗收項編號]`，就會對應到驗收清單的項目。
+- **QA → 除錯**：重現 → 找根本原因 → 最小修正 → 重跑測試 → 提交，理由寫在提交訊息。
+- **QA → 驗收清單**：人工驗收用的互動清單，每一項的編號也是自動測試的對應依據。
+
+右欄的「**QA**」分頁：
+
+| 功能 | 做什麼 |
+|---|---|
+| 全部執行／各服務執行 | 跑測試，標題列顯示每個服務的通過、失敗、略過數 |
+| 驗收對照 | 每個驗收項有沒有自動測試、有沒有通過；標錯的編號會列出來 |
+| 測試結果 | 失敗的排前面，附錯誤訊息、詳細內容、失敗時的截圖；「交給除錯」一鍵帶入 |
+| 日誌 | 測試執行的輸出 |
+
+**任何技術都能接**：測試結果用 JUnit XML 這種共通格式（pytest、Vitest、Jest、Playwright、Go 等都支援）。Flutter 與 Supabase 已內建；其他服務在 `ARCHITECTURE.md` 的 services 寫 `test`（測試指令）與 `test_report`（報告位置）。
+
+**服務依賴**：services 寫 `depends_on: [db]`，啟動 API 時會自動先把資料庫開好。
+
+技術規格或 PRD 比上次測試新時，QA 分頁會提醒結果可能過時。
+
 ## 更新所有專案
 
 更新這個套件後，打開專案總覽按「**更新所有專案**」，或在終端機執行：
@@ -74,7 +95,7 @@ Chrome 擴充功能要手動載入一次（步驟在安裝後專案裡的 `設�
 python3 install.py --all
 ```
 
-對話紀錄、`PRODUCT.md`、`DESIGN.md`、`ARCHITECTURE.md`、需求文件與程式都不會被動到。開著的工作台要關掉重開。
+對話紀錄、`PRODUCT.md`、`DESIGN.md`、`ARCHITECTURE.md`、需求文件與程式都不會被動到。開著的工作台要關掉重開。更新後，工具檔（`scripts/`、`.agents/`、`.claude/`、啟動檔）會自動提交一次，不會一直掛在「未提交」。
 
 ## 只留最新版
 
@@ -120,7 +141,7 @@ git config --global user.email "你的信箱"
 │  ├─ 原型驗證/  技術規格/  驗收清單/  資料分析/  上線/
 │  └─ 素材/                             你提供的原始材料（不是交付物）
 ├─ （程式資料夾）                        位置由 ARCHITECTURE.md 的 services 決定，例如 app/、web/admin/、supabase/
-├─ .agents/workflows/                   13 份工作流說明書
+├─ .agents/workflows/                   15 份工作流說明書
 ├─ .claude/skills/  .claude/agents/     設計層
 ├─ scripts/                             匯出服務、工作台、pm_sync、validate_prd
 ├─ .pm-workflow/  .pm-console/  .handoff/   隱藏：設定、續接脈絡、同步紀錄、自動備份

@@ -64,6 +64,29 @@ def setup_git(root):
     print("   要推到 GitHub：git remote add origin <網址> && git push -u origin main（建議私人儲存庫）")
 
 
+TOOLING = ["scripts", ".agents", ".claude", ".gitignore", ".gitattributes", "設計層說明.md",
+           "開啟PM工作台.command", "開啟PM工作台.bat", "啟動原型匯出服務.command", "啟動原型匯出服務.bat", ".mcp.json.example"]
+
+
+def commit_tooling(root):
+    """更新後把工具檔（腳本、工作流、設計層、啟動檔）提交一次，不碰需求文件與程式。"""
+    def git(*a):
+        return subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True)
+    try:
+        if git("rev-parse", "--is-inside-work-tree").stdout.strip() != "true":
+            return
+    except OSError:
+        return
+    paths = [p for p in TOOLING if (root / p).exists()]
+    if not paths:
+        return
+    git("add", "-A", "--", *paths)
+    if not git("diff", "--cached", "--name-only", "--", *paths).stdout.strip():
+        return
+    r = git("commit", "-q", "-m", "更新 PM Studio 工具", "--", *paths)
+    print("✅ 已提交工具更新" if r.returncode == 0 else "⚠️ 工具更新沒有自動提交（多半是 git 作者未設定），可稍後手動提交 scripts、.agents、.claude")
+
+
 def update_all(skip):
     import json, os
     home = Path(os.environ.get("PM_STUDIO_HOME") or (Path.home() / ".pm-studio"))
@@ -89,6 +112,8 @@ def update_all(skip):
             if code != 0:
                 failed.append(f"{root}（{name}）")
                 break
+        else:
+            commit_tooling(root)
     print(f"\n更新完成：{len(paths) - len(failed)} / {len(paths)} 個專案。")
     if failed:
         print("未完成：" + "、".join(failed))
@@ -117,6 +142,7 @@ def main():
             raise SystemExit(f"{name} 安裝失敗（代碼 {code}），先解決上面的錯誤再重跑。")
     register(root)
     setup_git(root)
+    commit_tooling(root)
     print(f"\n全部裝好：{root}")
     print("下一步：雙擊專案裡的「開啟PM工作台」，先按「設計方向」定這個產品的 PRODUCT.md 與 DESIGN.md。")
     print("        所有專案的進度：雙擊本套件裡的「開啟專案總覽」。")

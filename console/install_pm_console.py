@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-FILES = ["pm_console.py", "pm_console.html", "pm_dev.py", "pm_app.py", "pm_services.py"]
+FILES = ["pm_console.py", "pm_console.html", "pm_dev.py", "pm_app.py", "pm_services.py", "pm_qa.py"]
 
 
 def write(path, text, crlf=False, exe=False):

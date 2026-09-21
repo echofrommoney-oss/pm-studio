@@ -224,6 +224,7 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
       <button role="tab" data-tab="svc-web" aria-selected="false" hidden>前端</button>
       <button role="tab" data-tab="backend" aria-selected="false" hidden>後端</button>
       <button role="tab" data-tab="svc-backend" aria-selected="false" hidden>後端</button>
+      <button role="tab" data-tab="qa" aria-selected="false" hidden>QA</button>
       <button role="tab" data-tab="setup" aria-selected="false" hidden>開發</button>
     </div>
     <div class="tabpane" id="tab-docs">
@@ -262,6 +263,7 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
     <div class="tabpane" id="tab-svc-app" hidden></div>
     <div class="tabpane" id="tab-svc-web" hidden></div>
     <div class="tabpane" id="tab-svc-backend" hidden></div>
+    <div class="tabpane" id="tab-qa" hidden></div>
     <div class="tabpane" id="tab-setup" hidden>
       <div class="be-pad"><div class="be-card">
         <strong>先決定這個產品用什麼技術</strong>
@@ -429,6 +431,7 @@ async function loadReq(name, keepSelection){
   renderLog(); renderArtifacts(keepSelection); renderSync(); updateComposer();
   if (typeof TAB !== 'undefined' && TAB === 'backend' && BE.view === 'progress') renderProgress();
   if (typeof TAB !== 'undefined' && TAB.startsWith('svc-') && svcState(TAB.slice(4)).view === 'progress') svcProgress(TAB.slice(4));
+  if (typeof TAB !== 'undefined' && TAB === 'qa') qaRefresh(true);
 }
 function renderSync(){
   const el = $('#pv-sync'); const st = S.reqData?.stale || [];
@@ -597,6 +600,7 @@ function switchTab(tab){
   if (tab === 'backend') beRefresh(true);
   if (tab === 'app') appRefresh(true, true);
   if (tab.startsWith('svc-')) loadStack().then(() => renderSvc(tab.slice(4)));
+  if (tab === 'qa') qaRefresh(true);
   if (tab === 'setup') loadStack().then(() => { if ((STACK?.services || []).length) switchTab(firstDevTab()); });
 }
 document.querySelectorAll('.pv-tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
@@ -990,7 +994,7 @@ async function loadStack(){
   show('app', flutter); show('backend', supa);
   show('svc-app', genApp); show('svc-web', has(s => s.role === 'web')); show('svc-backend', genBack);
   const bb = document.querySelector('.pv-tabs button[data-tab="svc-backend"]'); if (bb) bb.textContent = supa ? 'API 服務' : '後端';
-  show('setup', !svcs.length);
+  show('setup', !svcs.length); show('qa', svcs.length > 0);
   $('#st-sb').hidden = !supa;
   if (TAB !== 'docs' && document.querySelector(`.pv-tabs button[data-tab="${TAB}"]`)?.hidden) switchTab('docs');
 }
@@ -1120,6 +1124,118 @@ setInterval(async () => {
   const st = svcState(role);
   if (st.view === 'logs') svcLogs(role, false);
   else if (JSON.stringify((STACK?.services || []).map(s => s.run)) !== before && st.view === 'preview') renderSvc(role);
+}, 3000);
+
+
+/* ── QA ── */
+const QA = {view: 'accept', data: null, logFrom: {}, logs: [], open: {}};
+async function qaRefresh(render){
+  try{ QA.data = await api('/api/qa/state' + (S.req ? '?req=' + encodeURIComponent(S.req) : '')); }catch(e){ return; }
+  const running = (QA.data.services || []).some(s => s.running);
+  const b = document.querySelector('.pv-tabs button[data-tab="qa"]');
+  if (b) b.innerHTML = 'QA' + (running ? ' <span class="dot warn"></span>' : (QA.data.services || []).some(s => s.last && s.last.summary.failed) ? ' <span class="dot bad"></span>' : '');
+  if (TAB === 'qa' && render) renderQa();
+}
+function qaSummary(s){
+  if (s.running) return '<span style="color:var(--warn)">執行中…</span>';
+  if (!s.last) return '<span style="color:var(--faint)">還沒跑過</span>';
+  const m = s.last.summary;
+  return `<span class="st-done">✓${m.passed}</span> <span class="${m.failed ? 'st-todo' : 'st-later'}">✗${m.failed}</span>${m.skipped ? ` <span class="st-later">略過${m.skipped}</span>` : ''}`;
+}
+async function qaRun(body){
+  try{ await api('/api/qa/run', body); QA.view = QA.view === 'accept' || QA.view === 'results' ? QA.view : 'logs'; await qaRefresh(true); }
+  catch(e){ alert(e.message); }
+}
+function renderQa(){
+  const pane = $('#tab-qa'); const d = QA.data || {services: []};
+  const svcs = d.services || [];
+  const testable = svcs.filter(s => s.testable);
+  pane.innerHTML = `<div class="be-top">
+      <button class="btn primary" id="qa-all" ${testable.length && !svcs.some(s => s.running) ? '' : 'disabled'}>全部執行</button>
+      ${svcs.map(s => `<span style="display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 10px">${esc(s.label)} ${qaSummary(s)}
+        ${s.testable ? `<button class="linkbtn" data-qarun="${esc(s.id)}" ${s.running ? 'disabled' : ''}>執行</button>` : '<span style="color:var(--faint);font-size:12px">未設定測試</span>'}</span>`).join('')}
+    </div>
+    ${d.stale ? '<div class="pv-sync">技術規格或 PRD 在上次測試後改過，結果可能已過時。改完程式後重新執行。</div>' : ''}
+    <div class="be-main"><nav class="be-nav" aria-label="QA 功能">
+      ${[['accept', '驗收對照'], ['results', '測試結果'], ['logs', '日誌']].map(([k, l]) => `<button data-v="${k}" aria-current="${k === QA.view}">${l}</button>`).join('')}
+    </nav><div class="be-view" id="qa-view"></div></div>`;
+  $('#qa-all').onclick = () => qaRun({all: true});
+  pane.querySelectorAll('[data-qarun]').forEach(b => b.onclick = () => qaRun({ids: [b.dataset.qarun]}));
+  pane.querySelectorAll('.be-nav button').forEach(b => b.onclick = () => { QA.view = b.dataset.v; renderQa(); });
+  const v = $('#qa-view');
+  if (!svcs.length){ v.innerHTML = '<div class="be-pad"><div class="be-card"><strong>還沒有開發服務</strong><p>先完成「系統設計」並開始開發，這裡才有東西可以測。</p></div></div>'; return; }
+  if (QA.view === 'logs') return qaLogs(true);
+  if (QA.view === 'results') return qaResults(v, d);
+  qaAccept(v, d);
+}
+function qaAccept(v, d){
+  if (!S.req){ v.innerHTML = '<div class="be-pad">先在左邊選一個需求。</div>'; return; }
+  const items = d.acceptance || [];
+  if (!items.length){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>「${esc(S.req)}」還沒有驗收清單</strong><p>選「QA」→「驗收清單」產出後，這裡會列出每個驗收項有沒有自動測試、有沒有通過。</p></div></div>`; return; }
+  const cnt = k => items.filter(i => i.state === k).length;
+  const covered = items.length - cnt('none');
+  const lab = {passed: '✓ 通過', failed: '✗ 失敗', partial: '部分略過', none: '沒有自動測試'};
+  const cls = {passed: 'st-done', failed: 'st-todo', partial: 'st-later', none: 'st-later'};
+  v.innerHTML = `<div class="be-pad">
+    <h3>「${esc(S.req)}」驗收項 ${items.length} 個：${covered} 個有自動測試，${cnt('passed')} 個通過${cnt('failed') ? `，<span class="st-todo">${cnt('failed')} 個失敗</span>` : ''}</h3>
+    <table class="be"><thead><tr><th>編號</th><th>驗收項</th><th>自動測試</th><th>對應測試</th></tr></thead><tbody>
+    ${items.map(i => `<tr><td style="white-space:nowrap">${esc(i.id)}</td><td>${esc(i.text)}</td><td class="${cls[i.state]}" style="white-space:nowrap">${lab[i.state]}</td><td>${i.tests.map(esc).join('<br>')}</td></tr>`).join('')}
+    </tbody></table>
+    ${(d.orphan_tags || []).length ? `<p class="st-todo" style="font-size:12.5px;margin-top:10px">有測試標了驗收清單裡找不到的編號：${d.orphan_tags.map(esc).join('、')}。可能是驗收清單改過，選「QA」→「自動測試」請 Claude 對齊。</p>` : ''}
+    <p style="color:var(--muted);font-size:12.5px;margin-top:10px">沒有自動測試的項目仍要在驗收清單人工勾選。測試名稱帶 <code>[驗收 ${esc(S.req)}:編號]</code> 就會對應到這裡。</p></div>`;
+}
+function qaTestHtml(t, i){
+  const bad = t.status === 'failed' || t.status === 'error';
+  const open = QA.open[t.service + t.name];
+  return `<div style="border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin-bottom:8px;background:var(--surface)">
+    <div style="display:flex;gap:8px;align-items:flex-start">
+      <span class="${bad ? 'st-todo' : t.status === 'passed' ? 'st-done' : 'st-later'}" style="white-space:nowrap">${bad ? '✗' : t.status === 'passed' ? '✓' : '－'}</span>
+      <div style="flex:1;min-width:0"><strong style="font-weight:600">${esc(t.name)}</strong>
+        <div style="font-size:12px;color:var(--faint)">${esc(t.service_label)}${t.file ? ' · ' + esc(t.file) : ''}${t.suite ? ' · ' + esc(t.suite) : ''}</div>
+        ${bad && t.message ? `<div style="font-size:12.5px;color:var(--bad);margin-top:4px;word-break:break-word">${esc(t.message)}</div>` : ''}
+      </div>
+      ${bad ? `<button class="btn" data-debug="${i}">交給除錯</button>` : ''}
+    </div>
+    ${bad && (t.details || t.screenshots.length) ? `<button class="linkbtn" data-toggle="${esc(t.service + t.name)}" style="font-size:12px;margin-top:4px">${open ? '收合' : '看詳細'}</button>` : ''}
+    ${open ? `${t.details ? `<pre class="be-out">${esc(t.details)}</pre>` : ''}${t.screenshots.map(p => `<a href="/api/qa/file?path=${encodeURIComponent(p)}" target="_blank" rel="noopener"><img src="/api/qa/file?path=${encodeURIComponent(p)}" alt="失敗時的畫面" style="max-width:240px;border:1px solid var(--line);border-radius:6px;margin:8px 8px 0 0"></a>`).join('')}` : ''}
+  </div>`;
+}
+function qaResults(v, d){
+  const mine = (d.req_tests || []).slice().sort((a, b) => (a.status === 'passed') - (b.status === 'passed'));
+  const other = d.other_failed || [];
+  QA.list = [...mine, ...other];
+  v.innerHTML = `<div class="be-pad">
+    ${S.req ? `<h3>「${esc(S.req)}」的測試（${mine.length}）</h3>${mine.length ? mine.map((t, i) => qaTestHtml(t, i)).join('') : '<p>還沒有標記這個需求的測試。選「QA」→「自動測試」請 Claude 依驗收清單寫。</p>'}` : ''}
+    ${other.length ? `<h3>其他失敗的測試（${other.length}）</h3>${other.map((t, i) => qaTestHtml(t, mine.length + i)).join('')}` : ''}
+  </div>`;
+  v.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => { QA.open[b.dataset.toggle] = !QA.open[b.dataset.toggle]; qaResults(v, d); });
+  v.querySelectorAll('[data-debug]').forEach(b => b.onclick = () => {
+    const t = QA.list[+b.dataset.debug];
+    pickWorkflow('debug');
+    $('#input').value = `自動測試失敗，請重現、找出原因並修正，修完重跑相關測試。\n\n服務：${t.service_label}（${t.service}）\n測試：${t.name}\n檔案：${t.file || '（未知）'}\n錯誤：${(t.message || '').slice(0, 600)}${t.details ? '\n\n詳細：\n' + t.details.slice(0, 1500) : ''}`;
+    autosize(); $('#input').focus();
+  });
+}
+async function qaLogs(reset){
+  const v = $('#qa-view'); const svcs = (QA.data?.services || []);
+  if (reset){ QA.logs = []; QA.logFrom = {}; v.className = 'be-view'; v.innerHTML = '<div class="be-bar">測試執行的輸出</div><pre class="be-log" id="qa-log"></pre>'; }
+  for (const s of svcs){
+    const k = 'qa-' + s.id;
+    try{ const r = await api(`/api/dev/logs?service=${encodeURIComponent(k)}&from=${QA.logFrom[k] || 0}`); QA.logFrom[k] = r.total; QA.logs.push(...r.items.map(x => ({...x, svc: s.label}))); }catch(e){}
+  }
+  QA.logs.sort((a, b) => a.t - b.t);
+  const el = $('#qa-log'); if (!el) return;
+  const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 60;
+  el.textContent = QA.logs.map(x => `${new Date(x.t * 1000).toLocaleTimeString('zh-TW', {hour12: false})}  [${x.svc}] ${x.text}`).join('\n') || '（還沒有紀錄）';
+  if (atBottom || reset) v.scrollTop = v.scrollHeight;
+}
+setInterval(async () => {
+  const running = (QA.data?.services || []).some(s => s.running);
+  if (TAB !== 'qa' && !running) return;
+  await qaRefresh(false);
+  if (TAB !== 'qa') return;
+  if (QA.view === 'logs') qaLogs(false);
+  else if (running && !(QA.data?.services || []).some(s => s.running)) renderQa();
 }, 3000);
 
 /* ── 啟動 ── */
