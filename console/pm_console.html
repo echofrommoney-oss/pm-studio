@@ -935,12 +935,12 @@ function renderApp(){
     const dev = appRun('device');
     if (!isLive(dev)){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>裝置還沒啟動</strong><p>在上方選一台裝置或模擬器，按「啟動」。模擬器本身會開在另一個視窗，這裡每幾秒更新一次它的畫面，方便你一邊跟 Claude 對話一邊看。iOS 模擬器需要先安裝 Xcode。</p></div></div>`; return; }
     v.className = 'be-view frame';
-    v.innerHTML = `<div class="be-bar"><span id="shot-bar"></span><span style="flex:1"></span>每 3 秒更新一次畫面</div><div class="shot-wrap"><img id="app-shot" alt="裝置畫面"></div>`;
+    v.innerHTML = `<div class="be-bar"><span id="shot-bar"></span><span style="flex:1"></span>每 3 秒更新一次畫面</div><div class="shot-wrap"><img id="app-shot" alt="裝置畫面" hidden><span id="shot-wait" style="color:var(--muted);font-size:13px">等 APP 在裝置上跑起來後，這裡會出現畫面。第一次編譯 Android 可能要好幾分鐘。</span></div>`;
     const load = () => {
       const img = $('#app-shot'), d = appRun('device'); if (!img || !d) return;
       $('#shot-bar').textContent = `${d.label} · ${d.state === 'running' ? '執行中' : '啟動中（模擬器開機要一兩分鐘）'}`;
       if (d.state !== 'running') return;
-      const n = new Image(); n.onload = () => { img.src = n.src; }; n.src = '/api/app/screenshot?t=' + Date.now();
+      const n = new Image(); n.onload = () => { img.src = n.src; img.hidden = false; const w = $('#shot-wait'); if (w) w.remove(); }; n.src = '/api/app/screenshot?t=' + Date.now();
     };
     load(); AP.shotTimer = setInterval(() => { if (TAB === 'app' && AP.view === 'device') load(); }, 3000);
     return;

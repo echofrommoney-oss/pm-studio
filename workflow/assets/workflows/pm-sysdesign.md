@@ -105,7 +105,7 @@ services:
 
 規則：
 
-- `supabase`、`flutter`、`nextjs`、`vite`、`expo` 已內建啟動方式，只要 `id`、`role`、`label`、`dir`；需要時可覆寫 `run`、`env`。
+- `supabase`、`flutter`、`nextjs`、`vite`、`expo` 已內建啟動方式，只要 `id`、`role`、`label`、`dir`；需要時可覆寫 `run`、`env`。Flutter 的入口不是 `lib/main.dart` 時（例如分環境的 `lib/main_dev.dart`），加 `target: lib/main_dev.dart`。
 - `generic` 必須寫 `run`；有網頁或 API 的要寫 `url`。`run` 必須是**在本機跑、不會連到正式環境**的開發指令。
 - `env` 可用的變數：`{port}`、`{SUPABASE_URL}`、`{SUPABASE_ANON_KEY}`、`{SUPABASE_DB_URL}`、`{BACKEND_URL}`（第一個非 Supabase 後端的網址，沒有則為 Supabase 網址）、`{<服務 id 大寫>_URL}`。APP 在 Android 模擬器上執行時，工作台會自動把本機網址換成 `10.0.2.2`。
 - `tools` 只列開發需要的指令（安裝、測試、產生程式碼、資料庫遷移）。啟動開發伺服器的指令由工作台負責，會自動禁止 Claude 執行。

@@ -132,6 +132,7 @@ def services(project_id):
             "tools": merged.get("tools") or [],
             "test": merged.get("test", ""), "test_report": merged.get("test_report", ""),
             "auth": merged.get("auth") if isinstance(merged.get("auth"), dict) else None,
+            "target": str(merged.get("target") or ""),
             "depends_on": [str(x) for x in (merged.get("depends_on") or [])] if isinstance(merged.get("depends_on"), list)
                           else ([str(merged["depends_on"])] if merged.get("depends_on") else []),
         })

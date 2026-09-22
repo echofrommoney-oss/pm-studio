@@ -121,6 +121,12 @@ hallmark 與 impeccable 的規則以網頁為主，套到 Flutter 時照下面�
 - **動效克制**：依 `DESIGN.md` 的動效強度，用隱式動畫或 `flutter_animate` 做進場與狀態回饋，尊重系統的減少動態設定。
 - **做完用看的檢查**：請使用者啟動 APP 網頁預覽後，用 `python3 scripts/pm_shot.py <網頁預覽網址> .pm-console/shots/<畫面>.png --size mobile` 截圖並用 Read 看，對照 `DESIGN.md` 修。
 
+### 上線前一定要確認的三件事
+
+- **入口接好**：工作台執行的是 `lib/main.dart`（或 `ARCHITECTURE.md` 服務的 `target`）。改完後確認它啟動的是你的 APP，不是 `flutter create` 的範本計數器畫面。
+- **語系後備**：有 `app_zh_TW.arb` 就要有 `app_zh.arb`（內容可相同），否則產生語系檔會失敗。
+- **Android 設定**：用到 `flutter_local_notifications` 等需要 Java 8+ API 的套件時，`android/app/build.gradle(.kts)` 要開啟 core library desugaring 並加上 `desugar_jdk_libs` 依賴，否則 Android 編譯會失敗。
+
 ### 檢查
 
 ```bash

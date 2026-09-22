@@ -24,6 +24,7 @@ PID = ""
 RUNS = {}          # "web" / "device" -> FlutterRun
 _DEVTOOLS = {"proc": None, "url": ""}
 SCREEN_MARK = re.compile(r"//\s*pm-screen:\s*([\w\-/\[\]]+)")
+DEVTOOLS_URL = re.compile(r"(https?://(?:127\.0\.0\.1|localhost):\d+/\S*devtools/\?uri=\S+)")
 
 
 def init(root, data, project_id=""):
@@ -129,6 +130,7 @@ class FlutterRun:
         self.app_id = None
         self.url = ""          # web：網頁網址
         self.ws = ""           # VM service，DevTools 用
+        self.devtools = ""     # Flutter 自帶的 DevTools 網址（新版會印在輸出裡）
         self.state = "starting"
         self.device_id = ""
         self.platform = ""
@@ -161,6 +163,7 @@ class FlutterRun:
                     self._event(svc, ev)
             else:
                 pm_dev.log(svc, line)
+                self._devtools(line)
         code = self.proc.wait()
         self.state = "stopped"
         pm_dev.log(svc, f"APP 已結束（代碼 {code}）。")
@@ -179,14 +182,21 @@ class FlutterRun:
             pm_dev.log(svc, "✓ APP 已啟動" + (f"：{self.url}" if self.url else "") + "。")
         elif name == "app.log":
             pm_dev.log(svc, p.get("log", ""))
+            self._devtools(p.get("log", ""))
         elif name == "daemon.logMessage":
             pm_dev.log(svc, p.get("message", ""))
+            self._devtools(p.get("message", ""))
         elif name == "app.progress" and p.get("message"):
             pm_dev.log(svc, p["message"])
         elif name == "app.stop":
             self.state = "stopped"
         elif "error" in ev:
             pm_dev.log(svc, "指令失敗：" + str(ev.get("error"))[:300])
+
+    def _devtools(self, text):
+        m = DEVTOOLS_URL.search(text or "")
+        if m and not self.devtools:
+            self.devtools = m.group(1)
 
     def start(self, args):
         cmd = [flutter(), "run", "--machine"] + args
@@ -221,6 +231,12 @@ class FlutterRun:
         self.state = "stopped"
 
 
+def _target_args():
+    svc = flutter_service() or {}
+    target = str(svc.get("target") or "").strip()
+    return ["-t", target] if target else []
+
+
 def start(kind, project_id, device=None):
     if not flutter():
         raise RuntimeError("找不到 flutter 指令，請先安裝 Flutter SDK。")
@@ -234,7 +250,7 @@ def start(kind, project_id, device=None):
         run.platform = "web"
         defines = write_defines("web")
         run.start(["-d", "web-server", "--web-hostname", "127.0.0.1", "--web-port", str(web_port(project_id)),
-                   f"--dart-define-from-file={defines}"])
+                   f"--dart-define-from-file={defines}"] + _target_args())
         RUNS["web"] = run
         return run
     # 裝置：可以是已開啟的裝置，或要先啟動的模擬器
@@ -252,7 +268,7 @@ def start(kind, project_id, device=None):
                     raise RuntimeError("找不到這個裝置，重新整理清單再試。")
             run.device_id, run.platform, run.label = d["id"], d["platform"], d["name"]
             defines = write_defines(d["platform"])
-            run.start(["-d", d["id"], f"--dart-define-from-file={defines}"])
+            run.start(["-d", d["id"], f"--dart-define-from-file={defines}"] + _target_args())
         except Exception as e:
             run.state = "stopped"
             pm_dev.log("app-device", f"啟動失敗：{e}")
@@ -333,7 +349,11 @@ def screenshot():
 
 
 def devtools_url():
-    run = next((r for r in RUNS.values() if r.state == "running" and r.ws), None)
+    ready = [r for r in RUNS.values() if r.state == "running"]
+    own = next((r.devtools for r in ready if r.devtools), "")
+    if own:   # 新版 Flutter 自帶 DevTools，直接用它印出的網址
+        return own
+    run = next((r for r in ready if r.ws), None)
     if not run:
         raise RuntimeError("先啟動 APP，DevTools 才有東西可以看。")
     p = _DEVTOOLS.get("proc")
