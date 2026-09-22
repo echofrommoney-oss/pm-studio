@@ -87,6 +87,15 @@ services:
     openapi: /openapi.json                            # 有的話，API 測試台會列出端點
     tools: [uv, python -m pytest]                     # 允許 Claude 執行的指令開頭
     depends_on: [backend]                             # 啟動前要先開好的服務（例如 API 要等資料庫）
+    auth:                                             # 讓 API 測試台能自動登入（自建後端才需要）
+      login: POST /auth/login                         # 登入 API
+      body: {"email": "{email}", "password": "{password}"}   # 帳密的 JSON 範本
+      token: data.accessToken                         # 回應中 token 的位置；用 cookie 登入就寫 cookie
+      header: "Authorization: Bearer {token}"          # 送出時加的標頭（預設就是這個）
+      accounts:                                       # 示範資料裡已存在的測試帳號（只限本機示範資料）
+        - email: demo1@example.com
+          password: demo1234
+          role: owner
     test: uv run pytest --junitxml=reports/junit.xml  # 跑測試的指令
     test_report: reports/junit.xml                    # 測試報告（JUnit XML；可用 * 萬用字元或資料夾）
     env:                                              # 啟動時帶入的環境變數
@@ -101,6 +110,7 @@ services:
 - `env` 可用的變數：`{port}`、`{SUPABASE_URL}`、`{SUPABASE_ANON_KEY}`、`{SUPABASE_DB_URL}`、`{BACKEND_URL}`（第一個非 Supabase 後端的網址，沒有則為 Supabase 網址）、`{<服務 id 大寫>_URL}`。APP 在 Android 模擬器上執行時，工作台會自動把本機網址換成 `10.0.2.2`。
 - `tools` 只列開發需要的指令（安裝、測試、產生程式碼、資料庫遷移）。啟動開發伺服器的指令由工作台負責，會自動禁止 Claude 執行。
 - `depends_on`：這個服務需要誰先啟動（資料庫、另一個 API）。工作台啟動它時會自動先開好依賴的服務。
+- `auth`：自建後端需要登入時寫。工作台的 API 測試台會用它登入、自動帶 token，過期會自動重新登入；使用者可以在測試台切換身分驗證權限。`accounts` 只能列**本機示範資料**的帳號（和 seed 一致），不可寫任何正式環境的帳密。Supabase 不用寫，它有專屬的帳號面板。
 - `test`／`test_report`：QA 分頁用來跑測試、讀結果。報告一律用 **JUnit XML**（幾乎所有測試工具都支援）。Flutter 與 Supabase 已內建，不用寫；其他服務沒寫就無法在 QA 分頁執行。
 - 不需要的部分不列（例如沒有網站就沒有 web 服務）。
 

@@ -725,7 +725,7 @@ async function renderProgress(){
   const done = back.filter(i => i.state === 'done').length;
   v.innerHTML = `<div class="be-pad">
     ${!p.running ? setupCard().replace('<div class="be-pad">', '<div style="margin-bottom:16px">') : ''}
-    <h3>「${esc(S.req)}」後端 ${done} / ${back.length}</h3>
+    <h3 style="display:flex;align-items:center;gap:10px">「${esc(S.req)}」後端 ${done} / ${back.length}<span style="flex:1"></span><button class="btn" data-fullpage>在新分頁檢視完整規格</button></h3>
     ${back.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th></tr></thead><tbody>${back.map(i => `<tr${detailAttrs(i)}><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state}">${label[i.state]}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列後端項目。</p>'}
     ${p.error ? `<p class="st-todo">${esc(p.error)}</p>` : ''}
     ${later.length ? `<h3>網站（第三階段）</h3><table class="be"><tbody>${later.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-later">之後的階段</td></tr>`).join('')}</tbody></table>` : ''}
@@ -1047,7 +1047,7 @@ function renderSvc(role){
       <span style="color:var(--faint);font-size:12px">${esc(svc?.adapter || '')}${svc?.support === 'deep' ? '・專屬支援' : '・通用支援'}</span>
       <button class="btn" id="svc-btn-${role}">${live ? (svc.run.state === 'starting' ? '啟動中…（按一下停止）' : '停止') : '啟動'}</button>
       <span class="spacer"></span>
-      ${svc?.url ? `<a class="linkbtn" href="${esc(svc.url)}" target="_blank" rel="noopener">新分頁開啟</a>` : ''}
+      ${role === 'backend' ? `<a class="linkbtn" href="/progress?req=${encodeURIComponent(S.req || '')}" target="_blank" rel="noopener">在新分頁檢視完整規格</a>` : svc?.url ? `<a class="linkbtn" href="${esc(svc.url)}" target="_blank" rel="noopener">新分頁開啟</a>` : ''}
     </div>
     <div class="be-main"><nav class="be-nav" aria-label="功能">${views.map(([k, l]) => `<button data-v="${k}" aria-current="${k === st.view}">${l}</button>`).join('')}</nav>
     <div class="be-view" id="svc-view-${role}"></div></div>`;
@@ -1112,7 +1112,7 @@ async function svcProgress(role){
   const lab = {done: '✓ 已完成', todo: '✗ 尚未完成', unknown: '無法判斷', manual: '需手動確認'};
   const hint = {web: svc?.adapter === 'nextjs' ? '判斷方式：Next.js 的 app／pages 資料夾結構，或程式裡的 <code>pm-page: /路由</code> 標記。' : '判斷方式：程式裡的 <code>pm-page: /路由</code> 註解標記。',
     app: '判斷方式：畫面檔裡的 <code>pm-screen: 代號</code> 註解標記。', backend: '判斷方式：程式裡的 <code>pm-endpoint: GET /路徑</code> 註解標記，或服務啟動時的 OpenAPI 文件。'}[role];
-  v.innerHTML = `<div class="be-pad"><h3>「${esc(S.req)}」${esc(svc?.label || '')} ${items.filter(i => i.state === 'done').length} / ${items.length}</h3>
+  v.innerHTML = `<div class="be-pad"><h3 style="display:flex;align-items:center;gap:10px">「${esc(S.req)}」${esc(svc?.label || '')} ${items.filter(i => i.state === 'done').length} / ${items.length}<span style="flex:1"></span>${role === 'backend' ? '<button class="btn" data-fullpage>在新分頁檢視完整規格</button>' : ''}</h3>
     ${items.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th><th>位置</th></tr></thead><tbody>${items.map(i => `<tr${detailAttrs(i)}><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state === 'manual' ? 'unknown' : i.state}">${lab[i.state] || i.state}</td><td>${esc(i.where || '')}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列這個服務的項目。</p>'}
     <p style="color:var(--muted);font-size:12.5px;margin-top:10px">${hint}${role === 'backend' ? ' 點資料表或 API，對照技術規格與目前實作。' : ''}</p></div>`;
   bindDetailRows(v);
@@ -1120,24 +1120,62 @@ async function svcProgress(role){
 async function svcApi(role){
   const st = svcState(role), svc = curSvc(role), v = $('#svc-view-' + role); v.className = 'be-view';
   if (!svc.url){ v.innerHTML = '<div class="be-pad">ARCHITECTURE.md 沒寫這個服務的網址（url），無法測試。</div>'; return; }
-  let sug = []; try{ sug = (await api('/api/svc/openapi?id=' + encodeURIComponent(svc.id))).paths; }catch(e){}
+  let sug = [], auth = {configured: false, accounts: [], identity: ''};
+  try{ sug = (await api('/api/svc/openapi?id=' + encodeURIComponent(svc.id))).paths; }catch(e){}
+  try{ auth = await api('/api/svc/auth?id=' + encodeURIComponent(svc.id)); }catch(e){}
   const a = st.apiOut || {method: 'GET', path: '/', body: '', headers: ''};
+  if (a.needExample){
+    a.needExample = false;
+    try{ const ex = await api(`/api/svc/example?id=${encodeURIComponent(svc.id)}&method=${encodeURIComponent(a.method)}&path=${encodeURIComponent(a.path)}`);
+      a.path = ex.path; a.body = ex.body; a.notes = ex.notes; }catch(e){ a.notes = [e.message]; }
+    st.apiOut = a;
+  }
+  const idOpts = [['', '未登入'], ...auth.accounts.map(x => [x.email, `${x.email}${x.role ? '（' + x.role + '）' : ''}`])];
   v.innerHTML = `<div class="be-pad">
+    <div class="be-form">
+      <label>身分 <select id="sapi-id" ${auth.configured ? '' : 'disabled'}>${idOpts.map(([val, l]) => `<option value="${esc(val)}" ${val === auth.identity ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+      ${auth.configured ? '<button class="linkbtn" id="sapi-acc-toggle">管理測試帳號</button>' : ''}
+    </div>
+    ${auth.configured ? `<div id="sapi-acc" hidden style="margin:-4px 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)">
+        <div class="be-form" style="margin:0 0 6px"><input id="acc2-email" placeholder="帳號（信箱）" size="20"><input id="acc2-pass" placeholder="密碼" size="14"><input id="acc2-role" placeholder="角色（選填）" size="12"><button class="btn" id="acc2-add">加入</button></div>
+        <div style="font-size:12.5px;color:var(--muted)">${auth.accounts.length ? auth.accounts.map(x => `${esc(x.email)}${x.role ? '（' + esc(x.role) + '）' : ''} · 來源：${esc(x.source)}`).join('<br>') : '還沒有測試帳號。加入示範資料裡已存在的帳號，或請 Claude 在 ARCHITECTURE.md 的 auth.accounts 列出示範帳號。'}</div>
+        <div style="font-size:12px;color:var(--faint);margin-top:6px">工作台會用 ${esc(auth.login || 'auth.login')} 登入並自動帶上 token；token 過期時自動重新登入。帳密只存在這台電腦，不進 git。</div>
+      </div>` : `<div class="pv-sync" style="margin:0 0 12px;border-radius:8px">這個後端還沒告訴工作台怎麼登入，需要登入的 API 會回 401。<button class="btn" id="sapi-ask">請 Claude 設定登入方式</button></div>`}
     <div class="be-form">
       <select id="sapi-m" aria-label="方法">${['GET','POST','PATCH','PUT','DELETE'].map(m => `<option ${m === a.method ? 'selected' : ''}>${m}</option>`).join('')}</select>
       <input id="sapi-p" list="sapi-sug" value="${esc(a.path)}" style="flex:1;min-width:240px" aria-label="路徑">
       <datalist id="sapi-sug">${sug.map(x => `<option value="${esc(x.split(' ')[1])}">${esc(x)}</option>`).join('')}</datalist>
+      <button class="btn" id="sapi-ex" title="從 OpenAPI 帶入這支 API 的參數與請求內容範例">帶入範例</button>
       <button class="btn primary" id="sapi-send">送出</button>
     </div>
-    <textarea id="sapi-h" placeholder='標頭（JSON），例如 {"Authorization":"Bearer ..."}' aria-label="標頭" style="min-height:44px">${esc(a.headers)}</textarea>
-    <textarea id="sapi-b" placeholder="內容（JSON）" aria-label="內容" style="margin-top:6px">${esc(a.body)}</textarea>
-    <p style="color:var(--muted);font-size:12.5px;margin:6px 0 0">送到 ${esc(svc.url)}。${sug.length ? `從 OpenAPI 讀到 ${sug.length} 個端點，路徑欄可以下拉選。` : svc.openapi ? '服務啟動後會從 OpenAPI 讀取端點清單。' : 'ARCHITECTURE.md 若寫了 openapi 路徑，這裡會列出端點。'}</p>
+    <textarea id="sapi-h" placeholder='額外的標頭（JSON，選填）。選了身分就不用自己填 Authorization。' aria-label="標頭" style="min-height:44px">${esc(a.headers || '')}</textarea>
+    <textarea id="sapi-b" placeholder="內容（JSON）" aria-label="內容" style="margin-top:6px">${esc(a.body || '')}</textarea>
+    ${(a.notes || []).length ? `<ul style="margin:6px 0 0;padding-left:1.2em;font-size:12.5px;color:var(--muted)">${a.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+    <p style="color:var(--muted);font-size:12.5px;margin:6px 0 0">送到 ${esc(svc.url)}。${sug.length ? `從 OpenAPI 讀到 ${sug.length} 個端點，路徑欄可以下拉選。` : svc.openapi ? '服務啟動後會從 OpenAPI 讀取端點清單。' : ''}</p>
     ${a.res ? resultHtml(a.res) : ''}</div>`;
+  const keep = () => { st.apiOut = {...(st.apiOut || {}), method: $('#sapi-m').value, path: $('#sapi-p').value.trim(), body: $('#sapi-b').value, headers: $('#sapi-h').value}; };
+  if ($('#sapi-id')) $('#sapi-id').onchange = async e => {
+    keep();
+    try{ await api('/api/svc/identity', {id: svc.id, email: e.target.value}); toast(e.target.value ? '已切換身分，送出時會自動登入' : '已切換為未登入'); }catch(err){ alert(err.message); }
+  };
+  if ($('#sapi-acc-toggle')) $('#sapi-acc-toggle').onclick = () => { $('#sapi-acc').hidden = !$('#sapi-acc').hidden; };
+  if ($('#acc2-add')) $('#acc2-add').onclick = async () => {
+    keep();
+    try{ await api('/api/svc/account', {id: svc.id, email: $('#acc2-email').value, password: $('#acc2-pass').value, role: $('#acc2-role').value}); svcApi(role); }catch(e){ alert(e.message); }
+  };
+  if ($('#sapi-ask')) $('#sapi-ask').onclick = () => {
+    pickWorkflow('sysdesign');
+    $('#input').value = `請在 ARCHITECTURE.md 的 services 裡，替「${svc.label}」（id: ${svc.id}）補上 auth 設定，讓工作台的 API 測試台能自動登入：login（登入 API 的方法與路徑）、body（帳密的 JSON 範本，用 {email} 與 {password}）、token（回應中 token 的位置，例如 data.accessToken；用 cookie 登入就寫 cookie）、header（預設 Authorization: Bearer {token}），並在 accounts 列出示範資料裡已存在的測試帳號與角色（只限本機示範資料）。請先讀程式確認實際的登入方式，列出要改的內容給我確認後再改。`;
+    autosize(); $('#input').focus();
+  };
+  $('#sapi-ex').onclick = () => { keep(); st.apiOut.needExample = true; svcApi(role); };
   $('#sapi-send').onclick = async () => {
-    const out = {method: $('#sapi-m').value, path: $('#sapi-p').value.trim(), body: $('#sapi-b').value, headers: $('#sapi-h').value};
-    let headers = {}; try{ headers = out.headers.trim() ? JSON.parse(out.headers) : {}; }catch(e){ alert('標頭不是有效的 JSON'); return; }
+    keep();
+    const out = st.apiOut;
+    let headers = {}; try{ headers = (out.headers || '').trim() ? JSON.parse(out.headers) : {}; }catch(e){ alert('標頭不是有效的 JSON'); return; }
+    $('#sapi-send').disabled = true;
     try{ out.res = await api('/api/svc/request', {id: svc.id, method: out.method, path: out.path, body: out.body, headers}); }catch(e){ out.res = {error: e.message}; }
-    st.apiOut = out; svcApi(role);
+    svcApi(role);
   };
 }
 setInterval(async () => {
@@ -1294,9 +1332,14 @@ function detailHtml(d){
   return `${diff}<div class="dt-grid">
     <section><h4>技術規格</h4><div class="dt-spec">${d.spec_found ? d.spec_html : `<p class="dt-note">${esc(d.spec_note || '')}</p>`}</div></section>
     <section><h4>目前實作</h4><div class="dt-act">${actualHtml(d)}</div></section></div>
-    ${d.try ? `<div style="margin-top:10px"><button class="btn" data-try='${esc(JSON.stringify(d.try))}'>在 API 測試台試試</button></div>` : ''}`;
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${d.try ? `<button class="btn" data-try='${esc(JSON.stringify(d.try))}'>在 API 測試台試試</button>` : ''}
+      <a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="/progress?req=${encodeURIComponent(S.req)}${d.try ? '&test=1' : ''}#${encodeURIComponent(d.kind + ':' + d.name)}">在新分頁檢視與測試</a></div>`;
+}
+function bindFullPage(container){
+  container.querySelectorAll('[data-fullpage]').forEach(b => b.onclick = () => window.open('/progress?req=' + encodeURIComponent(S.req), '_blank', 'noopener'));
 }
 function bindDetailRows(container){
+  bindFullPage(container);
   container.querySelectorAll('tr.clickable').forEach(tr => {
     const toggle = async () => {
       const next = tr.nextElementSibling;
@@ -1319,10 +1362,10 @@ function bindDetailRows(container){
 }
 function tryInApi(t){
   if (t.target === 'supabase'){
-    BE.apiOut = {method: t.method, path: t.path, body: ''}; BE.view = 'api';
+    BE.apiOut = {method: t.method, path: t.path, body: t.body || ''}; BE.view = 'api';
     switchTab('backend'); return;
   }
-  const st = svcState('backend'); st.sid = t.target; st.view = 'api'; st.apiOut = {method: t.method, path: t.path, body: '', headers: ''};
+  const st = svcState('backend'); st.sid = t.target; st.view = 'api'; st.apiOut = {method: t.method, path: t.path, body: '', headers: '', needExample: true};
   switchTab('svc-backend');
 }
 

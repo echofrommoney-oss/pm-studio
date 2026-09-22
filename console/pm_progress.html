@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>建置進度</title>
+<style>
+:root{
+  --hue:250;
+  --paper:#f4f4f7; --surface:#fff; --ink:#24223a; --muted:#6c6983; --faint:#9a97ad;
+  --line:#e1dfe9; --line-strong:#cfccdb;
+  --accent:hsl(var(--hue) 52% 40%); --accent-ink:hsl(var(--hue) 55% 28%); --accent-soft:hsl(var(--hue) 60% 96%);
+  --ok:#2f7a55; --warn:#a8641a; --bad:#b3383b;
+  --font:"PingFang TC","Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:14px/1.6 var(--font);color:var(--ink);background:var(--paper)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.head{max-width:1480px;margin:0 auto;padding:14px 28px 12px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.band{width:8px;align-self:stretch;background:var(--accent);border-radius:4px}
+h1{font-size:20px;margin:0;line-height:1.3}
+.sub{font-size:12.5px;color:var(--faint)}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.tools input[type=search],.tools select{border:1px solid var(--line-strong);border-radius:7px;padding:5px 9px;background:var(--surface)}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:7px;padding:5px 12px;font-size:13px}
+.btn:hover{border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:disabled{opacity:.5;cursor:wait}
+.linkbtn{border:0;background:none;color:var(--accent);padding:0;text-decoration:underline;text-underline-offset:3px;font-size:13px}
+main{max-width:1480px;margin:0 auto;padding:20px 28px 80px}
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:13px;color:var(--muted)}
+.chip b{color:var(--ink)}
+section.group{margin-bottom:26px}
+section.group h2{font-size:15px;margin:0 0 8px;display:flex;align-items:baseline;gap:10px}
+section.group h2 small{font-weight:400;color:var(--faint);font-size:12.5px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.row{display:grid;grid-template-columns:22px minmax(180px,1.2fr) 120px 1fr;gap:12px;align-items:center;padding:10px 14px}
+.row.click{cursor:pointer}
+.row.click:hover{background:#f8f7fb}
+.caret{color:var(--faint);transition:transform .15s;display:inline-block}
+.item.open .caret{transform:rotate(90deg)}
+.name{font-weight:600;word-break:break-all}
+.where{color:var(--faint);font-size:12.5px;word-break:break-all}
+.st-done{color:var(--ok)} .st-todo{color:var(--bad)} .st-unknown,.st-manual{color:var(--faint)}
+.panel{border-top:1px solid var(--line);padding:14px 16px 16px;background:#fbfafd}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:900px){.grid{grid-template-columns:1fr}.row{grid-template-columns:22px 1fr 90px}.row .where{grid-column:2/-1}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.card h3{font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600}
+.spec{font-size:13.5px;line-height:1.7;overflow-x:auto}
+.spec h1,.spec h2,.spec h3,.spec h4{font-size:14px;margin:4px 0 8px;color:var(--ink)}
+.spec p{margin:0 0 8px} .spec ul,.spec ol{margin:0 0 8px;padding-left:1.3em}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+th{background:#f6f5f9;font-weight:600}
+td:nth-child(-n+2),th:nth-child(-n+2){white-space:nowrap}
+code{background:#f0eff5;border-radius:4px;padding:0 4px;font-size:.93em}
+pre{background:#f6f5f9;border-radius:8px;padding:10px 12px;overflow:auto;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+tr.extra td{background:#fff6ea}
+.diff{margin:0 0 12px;padding:9px 12px;border-radius:8px;background:#fff7ed;color:#8a4b0f;font-size:13px}
+.diff.ok{background:#eef8f2;color:var(--ok)}
+.note{color:var(--muted);font-size:12.5px}
+.tester{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.tester summary{padding:10px 14px;cursor:pointer;font-weight:600;font-size:13.5px}
+.tester .body{padding:0 14px 14px}
+.form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.form input,.form select{border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--surface);font-size:13px}
+textarea{width:100%;font:12.5px/1.5 ui-monospace,Menlo,monospace;min-height:90px;border:1px solid var(--line-strong);border-radius:7px;padding:8px}
+.status{font-weight:600}.s2{color:var(--ok)}.s4{color:var(--warn)}.s5{color:var(--bad)}
+.empty{background:var(--surface);border:1px dashed var(--line-strong);border-radius:10px;padding:28px;text-align:center;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px}
+.toast[hidden]{display:none}
+</style>
+</head>
+<body>
+<header><div class="head">
+  <div class="band" aria-hidden="true"></div>
+  <div><h1 id="title">建置進度</h1><div class="sub" id="sub"></div></div>
+  <div class="tools">
+    <label>需求 <select id="req" aria-label="需求"></select></label>
+    <input type="search" id="q" placeholder="搜尋名稱" aria-label="搜尋">
+    <label style="font-size:13px"><input type="checkbox" id="todo"> 只看未完成</label>
+    <button class="btn" id="expand">全部展開</button>
+    <button class="btn" id="collapse">全部收合</button>
+    <button class="btn" id="reload">重新整理</button>
+  </div>
+</div></header>
+<main id="main"><div class="empty">讀取中…</div></main>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+const BOOT = /*__BOOT__*/null;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path, body){
+  const opt = body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Console-Token':BOOT.token}, body:JSON.stringify(body)};
+  const r = await fetch(path, opt); const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ('請求失敗 ' + r.status)); return d;
+}
+function toast(m){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2600); }
+document.documentElement.style.setProperty('--hue', BOOT.hue);
+document.title = BOOT.project + ' · 建置進度';
+
+const P = {req: '', data: null, stack: null, open: new Set(), details: {}, testers: {}, supa: null, auths: {}};
+const DETAIL = ['tables', 'endpoints', 'rpc'];
+const GROUP_ORDER = ['tables', 'rpc', 'functions', 'buckets', 'endpoints', 'app_screens'];
+const GROUP_LABEL = {tables: '資料表', rpc: '資料庫函式', functions: '後端函式', buckets: '檔案儲存', endpoints: 'API', app_screens: 'APP 畫面'};
+const STATE = {done: '✓ 已完成', todo: '✗ 尚未完成', unknown: '無法判斷', manual: '需手動確認'};
+const key = i => i.kind + ':' + i.name;
+
+async function init(){
+  const params = new URLSearchParams(location.search);
+  let st = {reqs: []}; try{ st = await api('/api/state'); }catch(e){}
+  const reqs = st.reqs.map(r => r.name);
+  P.req = params.get('req') && reqs.includes(params.get('req')) ? params.get('req') : reqs[0] || '';
+  $('#req').innerHTML = reqs.map(r => `<option ${r === P.req ? 'selected' : ''}>${esc(r)}</option>`).join('') || '<option>（沒有需求）</option>';
+  $('#req').onchange = e => { P.req = e.target.value; P.open.clear(); P.details = {}; history.replaceState(null, '', '?req=' + encodeURIComponent(P.req)); load(); };
+  await load();
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (h){ const [k, ...rest] = h.split(':'); const kk = k + ':' + rest.join(':'); if (params.get('test')) P.testers[kk] = {open: true}; await toggle(kk, true); document.getElementById('i-' + cssId(kk))?.scrollIntoView({block: 'start'}); }
+}
+async function load(){
+  $('#title').textContent = `「${P.req}」建置進度`;
+  $('#sub').textContent = BOOT.project;
+  try{ [P.stack, P.data] = await Promise.all([api('/api/stack'), api('/api/progress?req=' + encodeURIComponent(P.req))]); }
+  catch(e){ $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  P.supa = (P.stack.services || []).some(s => s.adapter === 'supabase');
+  render();
+}
+function cssId(k){ return k.replace(/[^\w\u4e00-\u9fff-]/g, '_'); }
+function groups(){
+  const items = (P.data?.items || []).filter(i => {
+    const q = $('#q').value.trim().toLowerCase();
+    return (!q || i.name.toLowerCase().includes(q)) && (!$('#todo').checked || i.state !== 'done');
+  });
+  const out = [];
+  for (const g of GROUP_ORDER){ const list = items.filter(i => i.kind === g); if (list.length) out.push([GROUP_LABEL[g], list]); }
+  const pageKinds = [...new Set(items.filter(i => i.kind.startsWith('pages.')).map(i => i.kind))];
+  for (const k of pageKinds) out.push([items.find(i => i.kind === k).label, items.filter(i => i.kind === k)]);
+  return out;
+}
+function render(){
+  const d = P.data;
+  if (!d.manifest){ $('#main').innerHTML = `<div class="empty">這個需求還沒有技術規格清單。在工作台選「系統」→「技術規格」產出後再回來。</div>`; return; }
+  const all = d.items, done = all.filter(i => i.state === 'done').length;
+  const gs = groups();
+  $('#main').innerHTML = `<div class="summary"><span class="chip">全部 <b>${done} / ${all.length}</b> 完成</span>
+      ${GROUP_ORDER.filter(g => all.some(i => i.kind === g)).map(g => { const l = all.filter(i => i.kind === g); return `<span class="chip">${GROUP_LABEL[g]} <b>${l.filter(i => i.state === 'done').length} / ${l.length}</b></span>`; }).join('')}
+      <span class="chip">點有 ▸ 的項目，對照技術規格與實際欄位，並在下方直接測試</span></div>
+    ${gs.length ? gs.map(([label, list]) => `<section class="group"><h2>${esc(label)} <small>${list.filter(i => i.state === 'done').length} / ${list.length}</small></h2>
+      ${list.map(i => itemHtml(i)).join('')}</section>`).join('') : '<div class="empty">沒有符合條件的項目。</div>'}`;
+  document.querySelectorAll('.row.click').forEach(r => r.onclick = () => toggle(r.dataset.key));
+  for (const k of P.open) fillPanel(k);
+}
+function itemHtml(i){
+  const k = key(i), can = DETAIL.includes(i.kind), open = P.open.has(k);
+  return `<div class="item ${open ? 'open' : ''}" id="i-${cssId(k)}">
+    <div class="row ${can ? 'click' : ''}" data-key="${esc(k)}" ${can ? 'tabindex="0"' : ''}>
+      <span class="caret">${can ? '▸' : ''}</span><span class="name">${esc(i.name)}</span>
+      <span class="st-${i.state}">${STATE[i.state] || i.state}</span><span class="where">${esc(i.where || '')}</span></div>
+    ${open ? `<div class="panel" id="p-${cssId(k)}"><span class="note">讀取中…</span></div>` : ''}</div>`;
+}
+async function toggle(k, forceOpen){
+  const item = document.getElementById('i-' + cssId(k));
+  if (P.open.has(k) && !forceOpen){
+    P.open.delete(k); item?.classList.remove('open'); document.getElementById('p-' + cssId(k))?.remove(); return;
+  }
+  P.open.add(k);
+  if (!item){ render(); return; }
+  item.classList.add('open');
+  if (!document.getElementById('p-' + cssId(k))) item.insertAdjacentHTML('beforeend', `<div class="panel" id="p-${cssId(k)}"><span class="note">讀取中…</span></div>`);
+  await fillPanel(k);
+}
+async function fillPanel(k){
+  const el = document.getElementById('p-' + cssId(k)); if (!el) return;
+  const [kind, ...rest] = k.split(':'); const name = rest.join(':');
+  if (!P.details[k]){
+    try{ P.details[k] = await api(`/api/detail?req=${encodeURIComponent(P.req)}&kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(name)}`); }
+    catch(e){ el.innerHTML = `<span class="st-todo">${esc(e.message)}</span>`; return; }
+  }
+  const d = P.details[k];
+  el.innerHTML = detailHtml(d) + testerHtml(k, d);
+  bindTester(k, d);
+}
+function fieldsTable(cols, extra){
+  if (!cols || !cols.length) return '<p class="note">沒有欄位資料。</p>';
+  return `<table><thead><tr><th>欄位</th><th>型別</th><th>必填</th><th>預設</th><th>備註</th></tr></thead><tbody>${cols.map(c =>
+    `<tr class="${extra && extra.includes(c.name) ? 'extra' : ''}"><td><code>${esc(c.name)}</code></td><td>${esc(c.type)}</td><td>${c.required ? '是' : ''}</td><td>${esc(c.default ?? '')}</td><td>${esc(c.note || '')}</td></tr>`).join('')}</tbody></table>`;
+}
+function actualHtml(d){
+  const a = d.actual;
+  if (!a) return `<p class="note">${esc(d.actual_note || '讀不到實作資料。')}</p>`;
+  if (a.type === 'columns') return (a.caption ? `<p class="note">${esc(a.caption)}</p>` : '') + fieldsTable(a.columns, d.diff?.actual_only) + (d.actual_note ? `<p class="note">${esc(d.actual_note)}</p>` : '');
+  return `<p style="margin:0 0 8px"><code>${esc(a.method)} ${esc(a.path)}</code>${a.summary ? ' — ' + esc(a.summary) : ''}<br><span class="note">取自「${esc(a.service)}」的 OpenAPI</span></p>
+    ${a.params.length ? `<p class="note">參數</p><table><thead><tr><th>名稱</th><th>位置</th><th>必填</th><th>型別</th></tr></thead><tbody>${a.params.map(x => `<tr><td><code>${esc(x.name)}</code></td><td>${esc(x.in)}</td><td>${x.required ? '是' : ''}</td><td>${esc(x.type)}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${a.body ? `<p class="note" style="margin-top:10px">請求內容</p>${fieldsTable(a.body)}` : ''}
+    ${a.responses.length ? `<p class="note" style="margin-top:10px">回應</p>${a.responses.map(r => `<div style="margin-bottom:8px"><strong>${esc(r.code)}</strong> ${esc(r.description)}${r.fields.length ? fieldsTable(r.fields) : ''}</div>`).join('')}` : ''}`;
+}
+function detailHtml(d){
+  let diff = '';
+  if (d.diff){
+    const a = d.diff.spec_only, b = d.diff.actual_only;
+    diff = (a.length || b.length)
+      ? `<div class="diff">${a.length ? `規格有、實作還沒有：<code>${a.map(esc).join('</code>、<code>')}</code>` : ''}${a.length && b.length ? '<br>' : ''}${b.length ? `實作有、規格沒寫：<code>${b.map(esc).join('</code>、<code>')}</code>（表格中以淡橘色標示）` : ''}</div>`
+      : '<div class="diff ok">欄位和技術規格一致。</div>';
+  }
+  return `${diff}<div class="grid">
+    <div class="card"><h3>技術規格</h3><div class="spec">${d.spec_found ? d.spec_html : `<p class="note">${esc(d.spec_note || '')}</p>`}</div></div>
+    <div class="card"><h3>目前實作</h3>${actualHtml(d)}</div></div>`;
+}
+
+/* ── 測試 ── */
+function testerHtml(k, d){
+  if (!d.try) return '';
+  const t = P.testers[k] || (P.testers[k] = {});
+  if (t.method === undefined){ t.method = d.try.method; t.path = d.try.path; t.body = d.try.body || ''; t.headers = ''; t.needExample = d.try.target !== 'supabase'; }
+  return `<details class="tester" id="t-${cssId(k)}" ${t.open ? 'open' : ''}><summary>API 測試</summary><div class="body">
+    <div class="form"><label>身分 <select data-f="ident"><option>讀取中…</option></select></label>
+      ${d.try.target === 'supabase' ? '<span class="note">Supabase：身分與工作台「後端 → 帳號」共用</span>' : '<span class="note" data-f="authnote"></span>'}</div>
+    <div class="form">
+      <select data-f="method">${['GET','POST','PATCH','PUT','DELETE'].map(m => `<option ${m === t.method ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <input data-f="path" value="${esc(t.path)}" style="flex:1;min-width:260px" aria-label="路徑">
+      ${d.try.target !== 'supabase' ? '<button class="btn" data-f="example">帶入範例</button>' : ''}
+      <button class="btn primary" data-f="send">送出</button>
+    </div>
+    <textarea data-f="headers" placeholder='額外的標頭（JSON，選填）' style="min-height:40px">${esc(t.headers)}</textarea>
+    <textarea data-f="body" placeholder="內容（JSON）" style="margin-top:6px">${esc(t.body)}</textarea>
+    ${(t.notes || []).length ? `<ul class="note" style="margin:6px 0 0;padding-left:1.2em">${t.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+    <div data-f="result">${t.res ? resultHtml(t.res) : ''}</div>
+  </div></details>`;
+}
+function resultHtml(r){
+  if (r.error) return `<pre class="st-todo">${esc(r.error)}</pre>`;
+  const c = r.status >= 500 ? 's5' : r.status >= 400 ? 's4' : 's2';
+  return `<p style="margin:10px 0 4px;font-size:13px"><span class="status ${c}">${r.status}</span> · ${r.ms} ms · 身分：${esc(r.identity)}</p><pre>${esc(r.body)}</pre>`;
+}
+async function bindTester(k, d){
+  const box = document.getElementById('t-' + cssId(k)); if (!box) return;
+  const t = P.testers[k], f = n => box.querySelector(`[data-f="${n}"]`);
+  box.addEventListener('toggle', () => { t.open = box.open; if (box.open && t.needExample) runExample(); });
+  const keep = () => { t.method = f('method').value; t.path = f('path').value.trim(); t.body = f('body').value; t.headers = f('headers').value; };
+  const target = d.try.target;
+  // 身分
+  const sel = f('ident');
+  if (target === 'supabase'){
+    let st = {accounts: [], identity: {type: 'anon'}}; try{ st = await api('/api/dev/state'); }catch(e){}
+    const cur = st.identity.type === 'user' ? 'user|' + st.identity.email : st.identity.type + '|';
+    sel.innerHTML = [['anon|', '匿名（未登入）'], ['service|', '管理權限'], ...st.accounts.map(a => ['user|' + a.email, a.email + (a.role ? '（' + a.role + '）' : '')])]
+      .map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    sel.onchange = async e => { const [type, email] = e.target.value.split('|'); try{ await api('/api/dev/identity', {type, email}); toast('已切換身分'); }catch(err){ alert(err.message); } };
+  } else {
+    let au = {configured: false, accounts: [], identity: ''}; try{ au = await api('/api/svc/auth?id=' + encodeURIComponent(target)); }catch(e){}
+    sel.disabled = !au.configured;
+    sel.innerHTML = [['', '未登入'], ...au.accounts.map(a => [a.email, a.email + (a.role ? '（' + a.role + '）' : '')])]
+      .map(([v, l]) => `<option value="${esc(v)}" ${v === au.identity ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    f('authnote').textContent = au.configured ? '選了身分會自動登入並帶上 token' : '這個後端還沒設定登入方式（ARCHITECTURE.md 的 auth），需要登入的 API 會回 401。';
+    sel.onchange = async e => { keep(); try{ await api('/api/svc/identity', {id: target, email: e.target.value}); toast('已切換身分'); }catch(err){ alert(err.message); } };
+  }
+  const runExample = async () => {
+    t.needExample = false; keep();
+    try{ const ex = await api(`/api/svc/example?id=${encodeURIComponent(target)}&method=${encodeURIComponent(t.method)}&path=${encodeURIComponent(t.path)}`);
+      t.path = ex.path; t.body = ex.body || t.body; t.notes = ex.notes; }catch(e){ t.notes = [e.message]; }
+    fillPanel(k);
+  };
+  if (f('example')) f('example').onclick = runExample;
+  f('send').onclick = async () => {
+    keep();
+    let headers = {}; try{ headers = t.headers.trim() ? JSON.parse(t.headers) : {}; }catch(e){ alert('標頭不是有效的 JSON'); return; }
+    f('send').disabled = true;
+    try{
+      t.res = target === 'supabase'
+        ? await api('/api/dev/request', {method: t.method, path: t.path, body: t.body, headers})
+        : await api('/api/svc/request', {id: target, method: t.method, path: t.path, body: t.body, headers});
+    }catch(e){ t.res = {error: e.message}; }
+    f('send').disabled = false;
+    f('result').innerHTML = resultHtml(t.res);
+  };
+  if (t.open && t.needExample) runExample();
+}
+
+$('#q').oninput = render;
+$('#todo').onchange = render;
+$('#reload').onclick = () => { P.details = {}; load(); };
+$('#collapse').onclick = () => { P.open.clear(); render(); };
+$('#expand').onclick = async () => {
+  (P.data?.items || []).filter(i => DETAIL.includes(i.kind)).forEach(i => P.open.add(key(i)));
+  render();
+};
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList?.contains('click')){ e.preventDefault(); toggle(e.target.dataset.key); } });
+init();
+</script>
+</body>
+</html>

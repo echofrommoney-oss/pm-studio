@@ -33,6 +33,8 @@ description: 後端開發工作流：依 ARCHITECTURE.md 選定的後端技術�
      # pm-endpoint: GET /pets/{id}
      ```
    - 框架能產生 OpenAPI 文件時，在 `ARCHITECTURE.md` 的服務寫 `openapi` 路徑（請使用者按「系統設計」補），工作台的 API 測試台就能列出所有端點。
+   - OpenAPI 要寫完整：每支 API 的路徑與查詢參數、請求內容的 schema（必填欄位、enum、格式，能給 example 更好）、回應 schema、需要登入的標 `security`。工作台用它在建置進度顯示實際定義，並在 API 測試台自動帶入參數與範例內容。
+   - 需要登入的後端：確認 `ARCHITECTURE.md` 的服務有 `auth` 設定（登入 API、token 位置），並在 `accounts` 列出 seed 裡的示範帳號；沒有就請使用者按「系統設計」補上。
 5. 用該技術的方式寫測試並執行（指令須在 `services` 的 `tools` 裡）。
 
 ### 完成

@@ -131,6 +131,7 @@ def services(project_id):
             "openapi": merged.get("openapi", ""), "env": merged.get("env") or {}, "env_file": merged.get("env_file", ""),
             "tools": merged.get("tools") or [],
             "test": merged.get("test", ""), "test_report": merged.get("test_report", ""),
+            "auth": merged.get("auth") if isinstance(merged.get("auth"), dict) else None,
             "depends_on": [str(x) for x in (merged.get("depends_on") or [])] if isinstance(merged.get("depends_on"), list)
                           else ([str(merged["depends_on"])] if merged.get("depends_on") else []),
         })
@@ -373,6 +374,15 @@ def request(project_id, sid, method, path, body_text="", headers=None):
     if ".." in path or path.startswith("//"):
         raise ValueError("路徑不正確")
     h = {k: v for k, v in (headers or {}).items() if isinstance(v, str) and k.lower() not in ("host",)}
+    who = "未登入"
+    ident = svc_identity(sid)
+    manual = any(k.lower() in ("authorization", "cookie") for k in h)
+    if ident and svc.get("auth") and not manual:
+        hdr = _auth_header(project_id, svc, ident)
+        h.update(hdr)
+        who = ident
+    elif manual:
+        who = "（使用你填的標頭）"
     body = None
     if body_text and method != "GET":
         try:
@@ -383,14 +393,17 @@ def request(project_id, sid, method, path, body_text="", headers=None):
         h.setdefault("Content-Type", "application/json")
     try:
         code, rh, raw, ms = pm_dev._http(method, svc["url"].rstrip("/") + path, h, body)
+        if code == 401 and ident and svc.get("auth") and not manual:
+            _TOKENS.pop((sid, ident), None)          # token 過期：重新登入一次
+            h.update(_auth_header(project_id, svc, ident))
+            code, rh, raw, ms = pm_dev._http(method, svc["url"].rstrip("/") + path, h, body)
     except OSError as e:
         raise RuntimeError(f"連不上 {svc['label']}：{e}（服務啟動了嗎？）")
     parsed = pm_dev._json(raw)
     text = json.dumps(parsed, ensure_ascii=False, indent=2) if parsed is not None else raw.decode("utf-8", "replace")
     pm_dev.log("svc-" + sid, f"[API 測試] {method} {path} → {code}（{ms} ms）")
     keep = {k: v for k, v in rh.items() if k.lower() in ("content-type", "location", "x-request-id")}
-    return {"status": code, "ms": ms, "identity": "（自訂後端，身分請自行帶 Authorization 標頭）", "headers": keep,
-            "body": text[:200_000]}
+    return {"status": code, "ms": ms, "identity": who, "headers": keep, "body": text[:200_000]}
 
 
 def openapi_paths(project_id, sid):
@@ -573,7 +586,7 @@ def _spec_text(req):
 def _norm_path(p):
     """/pets/:id、/pets/{id}、/pets/[id] 視為相同。"""
     p = "/" + str(p).strip().strip("/")
-    return re.sub(r"(:\w+|\{[^}]+\}|\[[^\]]+\])", "{}", p).lower()
+    return re.sub(r"(:\w+|\{[^}]+\}|\[[^\]]+\]|<\w+>)", "{}", p).lower()
 
 
 def _spec_section(text, kind, name):
@@ -718,7 +731,7 @@ def detail(project_id, req, kind, name, render_md):
         candidates = [s for s in backends if s["openapi"]] or backends[:1]
         for s in candidates:
             if not out["try"]:
-                out["try"] = {"target": s["id"], "method": method.upper(), "path": re.sub(r"(:\w+|\{[^}]+\}|\[[^\]]+\])", "1", path)}
+                out["try"] = {"target": s["id"], "method": method.upper(), "path": path}
             if not (s["openapi"] and RUNS.get(s["id"]) and RUNS[s["id"]].state == "running"):
                 out["actual_note"] = f"啟動「{s['label']}」" + ("後，會從 OpenAPI 讀出這支 API 的實際定義。" if s["openapi"] else
                                                           "並在 ARCHITECTURE.md 設定 openapi 路徑，才能讀出實際定義。")
@@ -772,11 +785,236 @@ def detail(project_id, req, kind, name, render_md):
                 out["actual"] = {"type": "columns", "columns": params, "caption": "參數"}
             else:
                 out["actual_note"] = "本機資料庫還沒有這個函式。"
-            out["try"] = {"target": "supabase", "method": "POST", "path": f"/rest/v1/rpc/{name}"}
+            args = {c["name"]: (1 if c["type"] in ("integer", "bigint", "numeric") else False if c["type"] == "boolean" else "")
+                    for c in (out["actual"] or {}).get("columns", [])} if out.get("actual") else {}
+            out["try"] = {"target": "supabase", "method": "POST", "path": f"/rest/v1/rpc/{name}",
+                          "body": json.dumps(args, ensure_ascii=False, indent=2) if args else ""}
         except RuntimeError as e:
             out["actual_note"] = str(e)
     else:
         out["actual_note"] = "這一類項目只顯示技術規格。"
     if not section:
         out["spec_note"] = "技術規格裡找不到專門講它的段落或表格列。建議在 Spec 的資料模型或介面章節用它的名稱當小標題。"
+    return out
+
+
+# ───────────── 自建後端的測試帳號與登入 ─────────────
+
+_TOKENS = {}   # (服務, 信箱) -> (標頭 dict, 到期時間)
+
+
+def _json_path(data, path):
+    cur = data
+    for part in str(path or "").split("."):
+        if not part:
+            continue
+        if isinstance(cur, list) and part.isdigit():
+            cur = cur[int(part)] if int(part) < len(cur) else None
+        elif isinstance(cur, dict):
+            cur = cur.get(part)
+        else:
+            return None
+    return cur
+
+
+def svc_accounts(project_id, sid):
+    svc = find(project_id, sid)
+    auth = svc.get("auth") or {}
+    out = []
+    for a in auth.get("accounts") or []:
+        if isinstance(a, dict) and a.get("email"):
+            out.append({"email": str(a["email"]), "password": str(a.get("password", "")), "role": str(a.get("role", "")),
+                        "source": "ARCHITECTURE.md"})
+    local = pm_dev._read_json(DATA / "svc-accounts" / f"{sid}.json", [])
+    for a in local:
+        if a.get("email") and a["email"] not in [x["email"] for x in out]:
+            out.append({**a, "source": "工作台"})
+    return out
+
+
+def add_svc_account(project_id, sid, email, password, role):
+    find(project_id, sid)
+    email = (email or "").strip()
+    if not email or not password:
+        raise ValueError("帳號與密碼都要填")
+    path = DATA / "svc-accounts" / f"{sid}.json"
+    items = [a for a in pm_dev._read_json(path, []) if a.get("email") != email]
+    items.append({"email": email, "password": password, "role": role or ""})
+    pm_dev._write_json(path, items)
+    return {"ok": True}
+
+
+def svc_identity(sid):
+    return pm_dev._read_json(DATA / "svc-identity.json", {}).get(sid, "")
+
+
+def set_svc_identity(project_id, sid, email):
+    if email and email not in [a["email"] for a in svc_accounts(project_id, sid)]:
+        raise ValueError("沒有這個測試帳號")
+    data = pm_dev._read_json(DATA / "svc-identity.json", {})
+    data[sid] = email or ""
+    pm_dev._write_json(DATA / "svc-identity.json", data)
+    return {"ok": True, "identity": data[sid]}
+
+
+def _auth_header(project_id, svc, email):
+    key = (svc["id"], email)
+    cached = _TOKENS.get(key)
+    if cached and cached[1] > time.time():
+        return dict(cached[0])
+    auth = svc["auth"]
+    acc = next((a for a in svc_accounts(project_id, svc["id"]) if a["email"] == email), None)
+    if not acc:
+        raise RuntimeError("找不到這個測試帳號")
+    method, _, lpath = str(auth.get("login") or "POST /auth/login").partition(" ")
+    if not lpath:
+        method, lpath = "POST", method
+    tmpl = str(auth.get("body") or '{"email": "{email}", "password": "{password}"}')
+    body = tmpl.replace("{email}", json.dumps(acc["email"])[1:-1]).replace("{password}", json.dumps(acc["password"])[1:-1])
+    try:
+        json.loads(body)
+    except ValueError:
+        raise RuntimeError("ARCHITECTURE.md 的 auth.body 不是有效的 JSON 範本")
+    try:
+        code, rh, raw, _ = pm_dev._http(method.upper(), svc["url"].rstrip("/") + "/" + lpath.lstrip("/"),
+                                        {"Content-Type": "application/json"}, body.encode("utf-8"))
+    except OSError as e:
+        raise RuntimeError(f"登入時連不上 {svc['label']}：{e}")
+    data = pm_dev._json(raw)
+    if code >= 300:
+        msg = (data or {}).get("message") if isinstance(data, dict) else ""
+        raise RuntimeError(f"測試帳號 {email} 登入失敗（{code}）{('：' + msg) if msg else ''}。帳密或 auth 設定可能不對。")
+    token_path = str(auth.get("token") or "token")
+    if token_path == "cookie":
+        cookie = "; ".join(v.split(";")[0] for k, v in rh.items() if k.lower() == "set-cookie")
+        if not cookie:
+            raise RuntimeError("登入成功，但回應沒有 Set-Cookie")
+        header = {"Cookie": cookie}
+    else:
+        token = _json_path(data, token_path)
+        if not token:
+            raise RuntimeError(f"登入成功，但在回應的「{token_path}」找不到 token。請檢查 ARCHITECTURE.md 的 auth.token。")
+        name, _, value = str(auth.get("header") or "Authorization: Bearer {token}").partition(":")
+        header = {name.strip(): value.strip().replace("{token}", str(token))}
+    _TOKENS[key] = (header, time.time() + int(auth.get("ttl") or 1500))
+    pm_dev.log("svc-" + svc["id"], f"[API 測試] 已用測試帳號 {email} 登入")
+    return dict(header)
+
+
+def auth_state(project_id, sid):
+    svc = find(project_id, sid)
+    return {"configured": bool(svc.get("auth")), "identity": svc_identity(sid),
+            "accounts": [{k: a[k] for k in ("email", "role", "source")} for a in svc_accounts(project_id, sid)],
+            "login": (svc.get("auth") or {}).get("login", "")}
+
+
+# ───────────── 範例請求：從 OpenAPI 帶入參數與內容 ─────────────
+
+def _skeleton(schema, doc, depth=0):
+    schema = _resolve(schema, doc)
+    if not isinstance(schema, dict) or depth > 4:
+        return None
+    for k in ("example", "default"):
+        if k in schema:
+            return schema[k]
+    if schema.get("enum"):
+        return schema["enum"][0]
+    if schema.get("oneOf") or schema.get("anyOf"):
+        return _skeleton((schema.get("oneOf") or schema.get("anyOf"))[0], doc, depth + 1)
+    t, fmt = schema.get("type"), schema.get("format")
+    if t == "object" or "properties" in schema:
+        props = schema.get("properties") or {}
+        req = set(schema.get("required") or [])
+        keys = [k for k in props if k in req] or list(props)[:8]
+        return {k: _skeleton(props[k], doc, depth + 1) for k in keys}
+    if t == "array":
+        return [_skeleton(schema.get("items") or {}, doc, depth + 1)]
+    if t in ("integer", "number"):
+        return schema.get("minimum", 1)
+    if t == "boolean":
+        return False
+    return {"email": "demo@example.com", "date-time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "date": time.strftime("%Y-%m-%d"), "uuid": "00000000-0000-0000-0000-000000000000"}.get(fmt, "")
+
+
+def example(project_id, sid, method, path):
+    svc = find(project_id, sid)
+    method = (method or "GET").upper()
+    out = {"method": method, "path": path, "body": "", "notes": []}
+    doc = {}
+    if svc["openapi"] and svc["url"]:
+        try:
+            code, _, raw, _ = pm_dev._http("GET", svc["url"].rstrip("/") + "/" + svc["openapi"].lstrip("/"), {})
+            doc = pm_dev._json(raw) or {}
+        except OSError:
+            doc = {}
+    target = _norm_path(path.split("?")[0])
+    concrete = [x for x in target.strip("/").split("/")]
+
+    def seg_match(tpl):
+        t = _norm_path(tpl).strip("/").split("/")
+        return len(t) == len(concrete) and all(a == b or a == "{}" for a, b in zip(t, concrete))
+
+    op, oppath, exact = None, path, False
+    for p, ops in (doc.get("paths") or {}).items():
+        if isinstance(ops, dict) and method.lower() in ops and _norm_path(p) == target:
+            op, oppath, exact = ops[method.lower()], p, True
+            break
+    if not op:
+        for p, ops in (doc.get("paths") or {}).items():
+            if isinstance(ops, dict) and method.lower() in ops and seg_match(p):
+                op, oppath = ops[method.lower()], path.split("?")[0]   # 使用者填的是實際值，保留
+                break
+    if not op:
+        out["notes"].append("OpenAPI 裡找不到這支 API，參數請自行填寫。" if doc else "讀不到 OpenAPI，參數請自行填寫。")
+        return out
+    # 路徑參數：先找同一資源的清單 API，拿第一筆資料的值
+    names = re.findall(r"\{(\w+)\}|:(\w+)", oppath) if exact else []
+    names = [a or b for a, b in names]
+    filled = oppath
+    if names:
+        first_param = re.search(r"/(\{\w+\}|:\w+)", oppath)
+        collection = oppath[:first_param.start()] if first_param else ""
+        item = None
+        if collection and "get" in ((doc.get("paths") or {}).get(collection) or {}):
+            try:
+                r = request(project_id, sid, "GET", collection)
+                data = json.loads(r["body"]) if r["status"] < 300 else None
+                rows = data if isinstance(data, list) else next((data[k] for k in ("data", "items", "results", "rows")
+                                                                 if isinstance(data, dict) and isinstance(data.get(k), list)), [])
+                item = rows[0] if rows else None
+                if r["status"] >= 300:
+                    out["notes"].append(f"查 {collection} 取得範例編號時回了 {r['status']}，可能要先選一個有權限的身分。")
+            except (RuntimeError, ValueError):
+                pass
+        for n in names:
+            value = (item or {}).get(n) or (item or {}).get("id") if isinstance(item, dict) else None
+            if value is not None:
+                out["notes"].append(f"路徑參數 {n} 用了 {collection} 清單第一筆的值。")
+            else:
+                param = next((x for x in (op.get("parameters") or []) if _resolve(x, doc).get("name") == n), {})
+                value = _skeleton(_resolve(param, doc).get("schema", {}), doc) or f"<{n}>"
+                out["notes"].append(f"路徑參數 {n} 找不到真實資料，先填了範例值，請改成存在的編號。")
+            filled = filled.replace("{" + n + "}", str(value)).replace(":" + n, str(value))
+    # 必填的查詢參數
+    q = []
+    for x in op.get("parameters") or []:
+        x = _resolve(x, doc)
+        if x.get("in") == "query" and x.get("required"):
+            q.append(f"{x.get('name')}={_skeleton(x.get('schema', {}), doc)}")
+    out["path"] = filled + (("?" + "&".join(q)) if q else "")
+    # 請求內容
+    rb = _resolve(op.get("requestBody") or {}, doc)
+    for ct, media in (rb.get("content") or {}).items():
+        ex = media.get("example")
+        if ex is None and isinstance(media.get("examples"), dict) and media["examples"]:
+            ex = _resolve(next(iter(media["examples"].values())), doc).get("value")
+        if ex is None:
+            ex = _skeleton(media.get("schema") or {}, doc)
+        if ex is not None:
+            out["body"] = json.dumps(ex, ensure_ascii=False, indent=2)
+            out["notes"].append("請求內容是依 OpenAPI 產生的範例，送出前確認值是否合理。")
+        break
+    if svc.get("auth") and not svc_identity(sid) and op.get("security", doc.get("security")):
+        out["notes"].append("這支 API 需要登入：在上方「身分」選一個測試帳號。")
     return out

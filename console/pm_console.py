@@ -810,6 +810,8 @@ class Handler(BaseHTTPRequestHandler):
         path = url.path
         if path == "/":
             return self._index()
+        if path == "/progress":
+            return self._index(SCRIPTS / "pm_progress.html")
         if path == "/api/state":
             return self._send(200, state_payload())
         if path == "/api/req":
@@ -859,6 +861,16 @@ class Handler(BaseHTTPRequestHandler):
                                                           render_markdown_fragment))
             except Exception as e:
                 return self._send(409, {"error": str(e)})
+        if path == "/api/svc/auth":
+            try:
+                return self._send(200, pm_services.auth_state(project_id(), q.get("id", "")))
+            except (ValueError, RuntimeError) as e:
+                return self._send(409, {"error": str(e)})
+        if path == "/api/svc/example":
+            try:
+                return self._send(200, pm_services.example(project_id(), q.get("id", ""), q.get("method", "GET"), q.get("path", "/")))
+            except (ValueError, RuntimeError) as e:
+                return self._send(409, {"error": str(e)})
         if path == "/api/svc/openapi":
             try:
                 return self._send(200, {"paths": pm_services.openapi_paths(project_id(), q.get("id", ""))})
@@ -904,7 +916,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(409, {"error": str(e)})
         return self._send(404, {"error": "not found"})
 
-    def _index(self):
+    def _index(self, page=None):
         cfg = load_config()
         pid = project_id()
         boot = {
@@ -912,7 +924,7 @@ class Handler(BaseHTTPRequestHandler):
             "hue": project_color(pid), "port": PORT, "version": VERSION,
             "workflows": [{"id": w["id"], "label": w["label"], "group": w.get("group", "自訂")} for w in cfg["workflows"]],
         }
-        html = UI_FILE.read_text(encoding="utf-8").replace(
+        html = (page or UI_FILE).read_text(encoding="utf-8").replace(
             "/*__BOOT__*/null", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
         self._send(200, html, "text/html; charset=utf-8", {
             "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; "
@@ -1057,6 +1069,11 @@ class Handler(BaseHTTPRequestHandler):
                 if name == "stop":
                     pm_services.stop(body.get("id", ""))
                     return self._send(200, {"ok": True})
+                if name == "identity":
+                    return self._send(200, pm_services.set_svc_identity(project_id(), body.get("id", ""), body.get("email", "")))
+                if name == "account":
+                    return self._send(200, pm_services.add_svc_account(project_id(), body.get("id", ""), body.get("email"),
+                                                                       body.get("password"), body.get("role", "")))
                 if name == "request":
                     return self._send(200, pm_services.request(project_id(), body.get("id", ""), body.get("method"),
                                                                body.get("path"), body.get("body", ""), body.get("headers") or {}))
