@@ -190,7 +190,8 @@
   ],
   "workflows/pm-design.md": [
     "373e792ec65a2844625fec0eccfb6e13c77c0fac86f9a8aa09c22114f67810de",
-    "4912ca6266acb0df94a7f7d38dbfc70eb5c241d67fa31be14761e027aac20b18"
+    "4912ca6266acb0df94a7f7d38dbfc70eb5c241d67fa31be14761e027aac20b18",
+    "13d624d4456d0968fd0c4876bd23f668d0b151fca942a148df6317d6afbcf096"
   ],
   "workflows/pm-validate.md": [
     "3dfb70d3d1e5f0f047db79d3beb69dacc7be3c8631bff4ae3f14e94d7e2071d8",
@@ -231,19 +232,24 @@
   ],
   "workflows/pm-app.md": [
     "f24f4e2eee33040d1c2d68a91602e9b9657f5395165558ae7cd889c2129ff4cc",
-    "d982772408c75491e78d3d272392c636c7726c7b9364c47864cf8262810ba4e2"
+    "d982772408c75491e78d3d272392c636c7726c7b9364c47864cf8262810ba4e2",
+    "84054e60e328f8d883de9469cb15a47e3048be651beb90e594482a0a0b312628"
   ],
   "scripts/pm_tokens.py": [
     "eefa6a55be948d4528ba618d9d99f8c534d7814477d78dd591046b56afae79de",
     "36dd2ecaf0d336bbb2d2905e7dfc29a1d1d836e3885bcc4be6140392c22732be"
   ],
   "workflows/pm-frontend.md": [
-    "8ac06896299ec5d6671c9dd293d031b618f6fd09f9949d30dd675d4941c924bd"
+    "8ac06896299ec5d6671c9dd293d031b618f6fd09f9949d30dd675d4941c924bd",
+    "fd3bff5df6e466df58e61c99d0cb58411b9812dfaffead71d830fc900ad6ce38"
   ],
   "workflows/pm-debug.md": [
     "44a4b7c62ebc9b78d08fa5a86a1f5716ac887afe2cb3652069fff8030ed0e3e2"
   ],
   "workflows/pm-qa.md": [
     "360e1f726193dbd2d6aa2e7ecdc8af76c6652aaf95fba7faca16a745fbec7640"
+  ],
+  "scripts/pm_shot.py": [
+    "fc547b64c6e9afd8f611d7dcc0785f768b575de07ff0c3bb8d0482fdc2ce934e"
   ]
 }

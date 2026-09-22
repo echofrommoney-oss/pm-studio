@@ -48,6 +48,7 @@ MAPPING = [
     ("scripts/validate_prd.py",            "scripts/validate_prd.py",            RUNTIME),
     ("scripts/pm_sync.py",                 "scripts/pm_sync.py",                 RUNTIME),
     ("scripts/pm_tokens.py",               "scripts/pm_tokens.py",               RUNTIME),
+    ("scripts/pm_shot.py",                 "scripts/pm_shot.py",                 RUNTIME),
     ("scripts/install_launcher.sh",        "scripts/install_launcher.sh",        RUNTIME),
     ("scripts/啟動原型匯出服務.command",     "啟動原型匯出服務.command",             RUNTIME),
     ("scripts/啟動原型匯出服務.bat",         "啟動原型匯出服務.bat",                 RUNTIME),

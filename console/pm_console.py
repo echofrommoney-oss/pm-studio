@@ -74,7 +74,7 @@ DEFAULT_CONFIG = {
         "Bash(sh:*)", "Bash(npx impeccable:*)", "Bash(.claude/skills/impeccable/scripts/impeccable:*)",
         "Bash(*/.claude/skills/impeccable/scripts/impeccable:*)", "Bash(grep:*)", "Bash(rm:*)",
         "Bash(git status:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)",
-        "Task", "WebSearch", "WebFetch",
+        "Task", "WebSearch", "WebFetch", "Skill",
         "Bash(supabase status:*)", "Bash(supabase migration:*)", "Bash(supabase functions new:*)",
         "Bash(supabase gen types:*)", "Bash(supabase db lint:*)", "Bash(supabase db diff:*)",
         "Bash(supabase test db:*)", "Bash(supabase init:*)", "Bash(deno:*)",
@@ -95,7 +95,7 @@ DEFAULT_CONFIG = {
         {"id": "design", "group": "設計", "label": "設計方向", "file": ".agents/workflows/pm-design.md",
          "instruction": "走流程 A：檢查並建立或修改 PRODUCT.md 與 DESIGN.md。使用者若貼了網址或截圖，用 hallmark study。"},
         {"id": "review", "group": "設計", "label": "檢查原型", "file": ".agents/workflows/pm-design.md",
-         "instruction": "走流程 C：對本需求的原型 HTML 先 hallmark audit，違反 DESIGN.md 的直接修並再 audit；使用者要求時再 impeccable critique 或分項命令。"},
+         "instruction": "走流程 C：先把本需求原型的每一頁截圖（python3 scripts/pm_shot.py 原型 HTML 路徑 .pm-console/shots/名稱.png --size mobile --full），用 Read 看圖；再依 hallmark audit 與 impeccable critique 的標準評，違反 DESIGN.md 的直接修並重新截圖確認；品味類建議列給使用者選。"},
         {"id": "validate", "group": "設計", "label": "原型驗證", "file": ".agents/workflows/pm-validate.md"},
         {"id": "motion", "group": "設計", "label": "加動效", "file": ".agents/workflows/pm-design.md",
          "instruction": "走流程 B 第 5 步：用 gsap-* skill 為本需求原型加動效，強度依 DESIGN.md，尊重 prefers-reduced-motion。"},
@@ -162,6 +162,12 @@ def load_config():
             w = dict(dw); changed = True
         if w.get("group") != dw["group"]:
             w["group"] = dw["group"]; changed = True
+        for k in ("file", "instruction"):   # 預設按鈕的說明跟著新版走
+            if dw.get(k, "") != w.get(k, ""):
+                w[k] = dw.get(k, "")
+                if not w[k]:
+                    w.pop(k, None)
+                changed = True
         ordered.append(w)
     for w in by_id.values():  # 使用者自訂的按鈕
         if isinstance(w, dict):
@@ -384,6 +390,9 @@ def tool_summary(name, inp):
     return ""
 
 
+VISUAL_WORKFLOWS = {"prd", "review", "motion", "hifi", "app", "frontend", "launch"}
+
+
 def compose_prompt(cfg, req, workflow, message, first_turn):
     lines = [
         "［PM 工作台背景說明］",
@@ -426,6 +435,26 @@ def compose_prompt(cfg, req, workflow, message, first_turn):
             lines.append("- 開發服務：" + "；".join(parts) + "。")
         lines.append("- 開發伺服器、模擬器、本機後端一律由工作台啟動與停止，你不要自己執行它們；需要時請使用者在右欄按啟動。"
                      "只准操作本機，禁止連到任何遠端或正式環境。本輪開始前工作台已做 git 快照，使用者可以一鍵退回。")
+    if workflow.get("id") in VISUAL_WORKFLOWS:
+        shots = []
+        for r in pm_app.state()["runs"].values():
+            if r["state"] == "running" and r.get("url"):
+                shots.append(f"APP 網頁預覽 {r['url']}")
+        try:
+            for sv in pm_services.state(project_id())["services"]:
+                if (sv.get("run") or {}).get("state") == "running" and sv.get("url") and sv["role"] != "backend":
+                    shots.append(f"{sv['label']} {sv['url']}")
+        except Exception:
+            pass
+        lines += [
+            "- 【設計品質，必做】這一輪會做或改畫面。動手前先用 Read 讀：DESIGN.md、.claude/skills/hallmark/SKILL.md、"
+            ".claude/skills/impeccable/reference/craft-floor.md；畫面平淡、要加個性時再讀 impeccable 的 reference/bolder.md 與 delight.md；"
+            "選字型或配色沒把握時用 ui-ux-pro-max 查（python3 .claude/skills/ui-ux-pro-max/scripts/search.py）；要動效讀 gsap-* skill。",
+            "- 回覆開頭先寫「設計計畫」四行：版面結構、字級層次、色彩用法、記憶點（這個畫面讓人記得的那一個元素）。沒有記憶點就是還不夠。",
+            "- 做完要用眼睛檢查，不是只讀程式碼：python3 scripts/pm_shot.py <網址或 HTML 路徑> .pm-console/shots/<名稱>.png --size mobile（網站用 desktop），"
+            "再用 Read 打開 PNG 看。對照 DESIGN.md 與 hallmark 的規則挑出最刺眼的問題修掉，回覆最後說明看到什麼、改了什麼。"
+            + ("目前可截圖的畫面：" + "；".join(shots) + "。" if shots else "APP 或網站沒在執行時，改截原型 HTML。"),
+        ]
     if workflow.get("instruction"):
         lines.append(f"- 補充指示：{workflow['instruction']}")
     lines += ["", "［使用者訊息］", message.strip()]

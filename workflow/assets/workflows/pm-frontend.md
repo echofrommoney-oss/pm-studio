@@ -65,7 +65,8 @@ python3 scripts/pm_tokens.py css --out <網站資料夾>/styles/tokens.css
 
 ## 檢查
 
-依框架跑型別檢查與 lint（例如 `pnpm run lint`、`pnpm exec tsc --noEmit`），要乾淨。
+1. **用看的**：網站在右欄啟動後，用 `python3 scripts/pm_shot.py <網站網址+路徑> .pm-console/shots/<頁面>.png --size desktop`（官網與合作夥伴網頁再截 `--size mobile`）截圖並用 Read 看，對照 `DESIGN.md` 與 hallmark 規則修。
+2. 依框架跑型別檢查與 lint（例如 `pnpm run lint`、`pnpm exec tsc --noEmit`），要乾淨。
 
 ## 完成
 

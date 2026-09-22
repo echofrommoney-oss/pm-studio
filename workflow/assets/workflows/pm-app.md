@@ -109,6 +109,18 @@ class AppConfig {
 5. 狀態齊全：載入中、空狀態、錯誤、無網路。空狀態與錯誤的文案照 PRD【邊界說明】。
 6. 無障礙：可點區域至少 48×48、圖示按鈕加 `Semantics`／`tooltip`、支援系統字級放大。
 
+### 避開 Material 預設長相（Flutter 專屬的設計規則）
+
+hallmark 與 impeccable 的規則以網頁為主，套到 Flutter 時照下面做，否則畫面會回到 Material 的標準長相：
+
+- **主題不只換色**：`ThemeData` 之外，用 `ThemeExtension` 放 `DESIGN.md` 的間距階梯、圓角、陰影、插畫佔位樣式，所有元件從這裡取值。
+- **自己的元件庫**：在 `widgets/` 做 `AppScaffold`、`AppCard`、`AppButton`、`AppSectionHeader`、`AppEmptyState` 等，畫面只用這些，不直接用 Material 的 `Card`、`ElevatedButton`、預設 `AppBar`。
+- **字級要有層次**：標題、內文、輔助文字至少三級，字級差要明顯；中文用 PingFang TC／Noto Sans TC 並設定適合中文的行高（約 1.5–1.7）。
+- **一個記憶點**：每個主要畫面要有一個讓人記得的元素（例如首頁的大插畫問候區、有個性的空狀態），不是清一色的列表加卡片。
+- **質感**：`DESIGN.md` 有紙紋、手繪、柔和陰影這類描述時，用背景紋理、非純白底色、柔和的陰影實現，不用 Material 預設的 elevation。
+- **動效克制**：依 `DESIGN.md` 的動效強度，用隱式動畫或 `flutter_animate` 做進場與狀態回饋，尊重系統的減少動態設定。
+- **做完用看的檢查**：請使用者啟動 APP 網頁預覽後，用 `python3 scripts/pm_shot.py <網頁預覽網址> .pm-console/shots/<畫面>.png --size mobile` 截圖並用 Read 看，對照 `DESIGN.md` 修。
+
 ### 檢查
 
 ```bash

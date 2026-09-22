@@ -66,6 +66,8 @@ Chrome 擴充功能要手動載入一次（步驟在安裝後專案裡的 `設�
 
 **權限自動跟著選型**：`ARCHITECTURE.md` 的 `tools` 列的開發指令會允許 Claude 執行；各服務的啟動指令由工作台負責，會自動禁止 Claude 執行。連到遠端資料庫或部署的指令一律封鎖。
 
+**設計工具確實會被用到**：做原型、APP、網站、落地頁時，工作台會要求 Claude 先讀 `DESIGN.md` 與 hallmark、impeccable 的規則，回覆開頭寫出「設計計畫」（版面、字級、色彩、記憶點），做完用 `scripts/pm_shot.py` 截圖、用看的檢查再修。「檢查原型」也改成先截圖再評。畫面太死板時，`pm-design.md` 有一套處方：bolder、delight、查字型配色、克制的動效。插畫佔位改用符合設計風格的樣式，不再是灰色色塊。
+
 **設計 token**：`scripts/pm_tokens.py` 把 `DESIGN.md` 轉成 Flutter（dart）、網站（css）、React Native（ts）用的檔案，程式裡不手寫色碼。
 
 **安全網**：「系統」和「開發」兩組的每一輪，執行前工作台會先做 git 快照；回覆下方有「退回這一輪」。改過資料庫的話，退回後到後端按「重置測試資料」。
