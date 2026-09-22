@@ -409,7 +409,8 @@ async function refreshState(){
 }
 function renderBanner(){
   let msg = '';
-  if (!S.state.claude) msg = '找不到 claude 指令。請先安裝 Claude Code，並在終端機執行一次 claude 完成登入，再重新開啟工作台。';
+  if (S.state.code_updated) msg = '工作台已經更新，但還在跑舊版的程式：請關掉這個工作台的終端機視窗，再重新雙擊「開啟PM工作台」，新功能才會生效。';
+  else if (!S.state.claude) msg = '找不到 claude 指令。請先安裝 Claude Code，並在終端機執行一次 claude 完成登入，再重新開啟工作台。';
   else if (!S.state.workflow_installed) msg = '這個專案還沒裝 studio-pm-workflow（缺 .agents/workflows/）。工作流按鈕會找不到規範檔，請先執行安裝器。';
   let el = $('#banner');
   if (!msg){ el && el.remove(); return; }

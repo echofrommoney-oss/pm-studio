@@ -40,6 +40,15 @@ import pm_services  # noqa: E402
 import pm_qa  # noqa: E402
 pm_dev.init(ROOT, DATA)
 pm_qa.init(ROOT, DATA)
+# 啟動時記下工作台程式檔的修改時間；更新後檔案變了、程式卻還是舊的，就提醒使用者重開
+_CODE_MTIMES = {f.name: f.stat().st_mtime for f in list(SCRIPTS.glob("pm_*.py"))}
+
+
+def code_updated():
+    for f in SCRIPTS.glob("pm_*.py"):
+        if _CODE_MTIMES.get(f.name) != f.stat().st_mtime:
+            return True
+    return False
 pm_app.init(ROOT, DATA)
 pm_services.init(ROOT, DATA)
 
@@ -1096,9 +1105,11 @@ class Handler(BaseHTTPRequestHandler):
 
 def state_payload():
     cfg = load_config()
+    updated = code_updated()
     run = CURRENT["run"]
     alive = export_service_alive()
     return {
+        "code_updated": updated,
         "project": cfg.get("project_name") or ROOT.name,
         "claude": bool(find_claude(cfg)),
         "workflow_installed": (ROOT / ".agents/workflows").is_dir(),
