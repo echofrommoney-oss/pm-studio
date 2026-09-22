@@ -557,3 +557,226 @@ def permission_rules(project_id):
                       f"Bash({pm} run test:*)", f"Bash({pm} run build:*)", f"Bash({_exec(pm)} tsc:*)"]
             deny += [f"Bash({pm} run dev:*)", f"Bash({pm} dev:*)", f"Bash({pm} start:*)"]
     return sorted(set(allow)), sorted(set(deny))
+
+
+# ───────────── 建置進度的明細：規格 vs 實作 ─────────────
+
+HEAD = re.compile(r"^(#{1,6})\s+(.*)$")
+
+
+def _spec_text(req):
+    folder = ROOT / req / "技術規格"
+    specs = sorted(folder.glob("*.md")) if folder.is_dir() else []
+    return specs[0].read_text(encoding="utf-8", errors="replace").replace("\r", "") if specs else ""
+
+
+def _norm_path(p):
+    """/pets/:id、/pets/{id}、/pets/[id] 視為相同。"""
+    p = "/" + str(p).strip().strip("/")
+    return re.sub(r"(:\w+|\{[^}]+\}|\[[^\]]+\])", "{}", p).lower()
+
+
+def _spec_section(text, kind, name):
+    """在技術規格裡找講這張表／這支 API 的段落；找不到標題就找表格裡的那幾列。"""
+    lines = text.split("\n")
+    if lines and lines[0].strip() == "---":
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), 0)
+        lines = lines[end + 1:]
+    if kind == "endpoints":
+        method, _, path = name.partition(" ")
+        if not path:
+            method, path = "", name
+        target = _norm_path(path)
+
+        def match(t):
+            t = t.replace("`", "")
+            paths = re.findall(r"/[\w\-/:{}\[\]]*", t)
+            return any(_norm_path(x) == target for x in paths) and (not method or method.upper() in t.upper())
+    else:
+        word = re.compile(r"(^|[^\w])" + re.escape(name) + r"([^\w]|$)", re.I)
+
+        def match(t):
+            return bool(word.search(t.replace("`", "")))
+    for i, line in enumerate(lines):
+        m = HEAD.match(line)
+        if m and match(m.group(2)):
+            level = len(m.group(1))
+            j = i + 1
+            while j < len(lines):
+                n = HEAD.match(lines[j])
+                if n and len(n.group(1)) <= level:
+                    break
+                j += 1
+            return "\n".join(lines[i:j]).strip()
+    # 退而求其次：表格裡提到它的列（連同表頭）
+    for i, line in enumerate(lines):
+        if line.strip().startswith("|") and match(line):
+            k = i
+            while k > 0 and lines[k - 1].strip().startswith("|"):
+                k -= 1
+            head = lines[k:k + 2] if k + 1 < len(lines) and re.match(r"^\s*\|?[\s:|-]+\|?\s*$", lines[k + 1]) else []
+            rows = [l for l in lines[k:] if l.strip().startswith("|")]
+            hits = [l for l in rows if match(l) and l not in head]
+            return "\n".join(head + hits)
+    return ""
+
+
+def _spec_fields(section):
+    """段落裡第一張表格的第一欄，當作規格列的欄位名。"""
+    rows = [l for l in section.split("\n") if l.strip().startswith("|")]
+    if len(rows) < 3:
+        return []
+    out = []
+    for r in rows[2:]:
+        cell = r.strip().strip("|").split("|")[0].strip().strip("`").strip()
+        cell = re.sub(r"[（(].*$", "", cell).strip()
+        if cell and re.match(r"^[A-Za-z_][\w]*$", cell):
+            out.append(cell)
+    return out
+
+
+def _resolve(schema, doc, depth=0):
+    if not isinstance(schema, dict) or depth > 4:
+        return schema
+    ref = schema.get("$ref")
+    if ref and ref.startswith("#/"):
+        node = doc
+        for part in ref[2:].split("/"):
+            node = node.get(part, {}) if isinstance(node, dict) else {}
+        return _resolve(node, doc, depth + 1)
+    return schema
+
+
+def _props(schema, doc):
+    schema = _resolve(schema, doc)
+    if not isinstance(schema, dict):
+        return []
+    if schema.get("type") == "array" and "items" in schema:
+        schema = _resolve(schema["items"], doc)
+    req = set(schema.get("required") or [])
+    out = []
+    for k, v in (schema.get("properties") or {}).items():
+        v = _resolve(v, doc)
+        desc = str(v.get("description") or "").replace("\n", " ")
+        out.append({"name": k, "type": v.get("format") or v.get("type") or ("參照" if "$ref" in v else ""),
+                    "required": k in req, "default": v.get("default", ""),
+                    "note": ("主鍵 " if "Primary Key" in desc else "") + ("外鍵 " if "Foreign Key" in desc else "")
+                            + re.sub(r"Note:.*", "", desc).strip()})
+    return out
+
+
+def detail(project_id, req, kind, name, render_md):
+    svcs = services(project_id)
+    supa = any(s["adapter"] == "supabase" for s in svcs)
+    text = _spec_text(req)
+    section = _spec_section(text, kind, name) if text else ""
+    out = {"kind": kind, "name": name, "spec_html": render_md(section) if section else "",
+           "spec_found": bool(section), "actual": None, "actual_note": "", "diff": None, "try": None}
+    spec_fields = _spec_fields(section) if section else []
+
+    if kind == "tables":
+        cols = None
+        if supa:
+            try:
+                doc = pm_dev.openapi_doc()
+                d = (doc.get("definitions") or {}).get(name)
+                cols = _props(d, doc) if d else []
+                if not d:
+                    out["actual_note"] = "本機資料庫還沒有這張表。"
+                out["try"] = {"target": "supabase", "method": "GET", "path": f"/rest/v1/{name}?select=*&limit=20"}
+            except RuntimeError as e:
+                out["actual_note"] = str(e)
+        else:
+            for s in svcs:
+                if s["role"] == "backend" and s["openapi"] and RUNS.get(s["id"]) and RUNS[s["id"]].state == "running":
+                    try:
+                        code, _, raw, _ = pm_dev._http("GET", s["url"].rstrip("/") + "/" + s["openapi"].lstrip("/"), {})
+                        doc = pm_dev._json(raw) or {}
+                    except OSError:
+                        continue
+                    schemas = {k.lower(): v for k, v in ((doc.get("components") or {}).get("schemas") or {}).items()}
+                    cand = [name.lower(), name.lower().rstrip("s"), name.lower().rstrip("es")]
+                    hit = next((schemas[c] for c in cand if c in schemas), None)
+                    if hit:
+                        cols = _props(hit, doc)
+                        out["actual_note"] = f"取自「{s['label']}」OpenAPI 的資料結構定義（不一定等於資料庫欄位）。"
+                        break
+            if cols is None and not out["actual_note"]:
+                out["actual_note"] = "後端不是 Supabase，工作台無法直接讀資料庫欄位；API 服務啟動且 OpenAPI 有同名的資料結構時會顯示在這裡。"
+        if cols is not None:
+            out["actual"] = {"type": "columns", "columns": cols}
+            if spec_fields:
+                have = {c["name"] for c in cols}
+                out["diff"] = {"spec_only": [f for f in spec_fields if f not in have],
+                               "actual_only": [c for c in have if c not in set(spec_fields)]}
+
+    elif kind == "endpoints":
+        method, _, path = name.partition(" ")
+        target = _norm_path(path)
+        backends = [s for s in svcs if s["role"] == "backend" and s["adapter"] != "supabase"]
+        # 有 OpenAPI 的服務才可能有 API 定義；都沒有時用第一個自建後端
+        candidates = [s for s in backends if s["openapi"]] or backends[:1]
+        for s in candidates:
+            if not out["try"]:
+                out["try"] = {"target": s["id"], "method": method.upper(), "path": re.sub(r"(:\w+|\{[^}]+\}|\[[^\]]+\])", "1", path)}
+            if not (s["openapi"] and RUNS.get(s["id"]) and RUNS[s["id"]].state == "running"):
+                out["actual_note"] = f"啟動「{s['label']}」" + ("後，會從 OpenAPI 讀出這支 API 的實際定義。" if s["openapi"] else
+                                                          "並在 ARCHITECTURE.md 設定 openapi 路徑，才能讀出實際定義。")
+                continue
+            try:
+                code, _, raw, _ = pm_dev._http("GET", s["url"].rstrip("/") + "/" + s["openapi"].lstrip("/"), {})
+                doc = pm_dev._json(raw) or {}
+            except OSError as e:
+                out["actual_note"] = f"讀不到 OpenAPI：{e}"
+                continue
+            for p, ops in (doc.get("paths") or {}).items():
+                if _norm_path(p) == target and isinstance(ops, dict) and method.lower() in ops:
+                    op = ops[method.lower()]
+                    params = [{"name": x.get("name"), "in": {"path": "路徑", "query": "查詢", "header": "標頭"}.get(x.get("in"), x.get("in")),
+                               "required": bool(x.get("required")), "type": (_resolve(x.get("schema", {}), doc) or {}).get("type", "")}
+                              for x in (_resolve(x, doc) for x in op.get("parameters") or [])]
+                    body = None
+                    rb = _resolve(op.get("requestBody") or {}, doc)
+                    for ct, media in (rb.get("content") or {}).items():
+                        body = _props(media.get("schema"), doc)
+                        break
+                    responses = []
+                    for codev, r in (op.get("responses") or {}).items():
+                        r = _resolve(r, doc)
+                        fields = []
+                        for ct, media in (r.get("content") or {}).items():
+                            fields = _props(media.get("schema"), doc)
+                            break
+                        responses.append({"code": codev, "description": r.get("description", ""), "fields": fields})
+                    out["actual"] = {"type": "operation", "path": p, "method": method.upper(), "summary": op.get("summary") or op.get("description") or "",
+                                     "params": params, "body": body, "responses": responses, "service": s["label"]}
+                    out["actual_note"] = ""
+                    break
+            if out["actual"]:
+                out["try"]["target"] = s["id"]
+                break
+            out["actual_note"] = f"「{s['label']}」的 OpenAPI 裡還沒有這支 API。"
+        if not backends:
+            out["actual_note"] = "這個專案沒有自建後端服務。"
+
+    elif kind == "rpc" and supa:
+        try:
+            doc = pm_dev.openapi_doc()
+            op = ((doc.get("paths") or {}).get(f"/rpc/{name}") or {}).get("post")
+            if op:
+                params = []
+                for x in op.get("parameters") or []:
+                    x = _resolve(x, doc)
+                    if x.get("in") == "body":
+                        params += _props(x.get("schema"), doc)
+                out["actual"] = {"type": "columns", "columns": params, "caption": "參數"}
+            else:
+                out["actual_note"] = "本機資料庫還沒有這個函式。"
+            out["try"] = {"target": "supabase", "method": "POST", "path": f"/rest/v1/rpc/{name}"}
+        except RuntimeError as e:
+            out["actual_note"] = str(e)
+    else:
+        out["actual_note"] = "這一類項目只顯示技術規格。"
+    if not section:
+        out["spec_note"] = "技術規格裡找不到專門講它的段落或表格列。建議在 Spec 的資料模型或介面章節用它的名稱當小標題。"
+    return out

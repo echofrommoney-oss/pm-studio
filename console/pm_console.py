@@ -652,8 +652,8 @@ def _md_inline(text):
     return t
 
 
-def render_markdown_page(title, src):
-    """夠用的 Markdown → HTML：標題、段落、清單、表格、引用、程式碼區塊、frontmatter。"""
+def render_markdown_fragment(src):
+    """夠用的 Markdown → HTML 片段：標題、段落、清單、表格、引用、程式碼區塊、frontmatter。"""
     import html as _h
     lines = src.replace("\r", "").split("\n")
     out, i = [], 0
@@ -703,6 +703,12 @@ def render_markdown_page(title, src):
             close(); i += 1; continue
         close(); out.append(f"<p>{_md_inline(st)}</p>"); i += 1
     close()
+    return "\n".join(out)
+
+
+def render_markdown_page(title, src):
+    import html as _h
+    inner = render_markdown_fragment(src)
     css = ("body{margin:0;background:#fff;color:#24223a;font:15px/1.75 'PingFang TC','Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif}"
            "main{max-width:78ch;padding:32px 40px 60px}h1{font-size:24px;line-height:1.3;margin:0 0 16px}h2{font-size:19px;margin:32px 0 10px}"
            "h3{font-size:16px;margin:24px 0 8px}h4{font-size:15px;margin:18px 0 6px}p{margin:0 0 12px}ul,ol{margin:0 0 12px;padding-left:1.5em}"
@@ -712,7 +718,7 @@ def render_markdown_page(title, src):
            "table{border-collapse:collapse;font-size:14px;min-width:60%}th,td{border:1px solid #e1dfe9;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f5f9;font-weight:600}"
            "a{color:#4b3fa0}")
     return ("<!DOCTYPE html><html lang='zh-Hant'><meta charset='utf-8'><title>" + _h.escape(title) + "</title><style>" + css
-            + "</style><main>" + "\n".join(out) + "</main></html>")
+            + "</style><main>" + inner + "</main></html>")
 
 
 # ───────────────────────── 跨專案總覽登記 ─────────────────────────
@@ -833,6 +839,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"items": [], "manifest": False})
             try:
                 return self._send(200, pm_services.progress(project_id(), req))
+            except Exception as e:
+                return self._send(409, {"error": str(e)})
+        if path == "/api/detail":
+            req = valid_req_name(q.get("req"))
+            if not req:
+                return self._send(400, {"error": "需求名稱不正確"})
+            try:
+                return self._send(200, pm_services.detail(project_id(), req, q.get("kind", ""), q.get("name", ""),
+                                                          render_markdown_fragment))
             except Exception as e:
                 return self._send(409, {"error": str(e)})
         if path == "/api/svc/openapi":

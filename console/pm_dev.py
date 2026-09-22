@@ -438,6 +438,14 @@ def openapi():
     return {"tables": tables, "rpc": rpc}
 
 
+def openapi_doc():
+    """PostgREST 自動產生的完整 OpenAPI 文件（含各資料表欄位定義）。"""
+    st = _require_running()
+    code, _, raw, _ = _http("GET", st["api"] + "/rest/v1/", _auth_headers(st["service"]))
+    doc = _json(raw)
+    return doc if isinstance(doc, dict) else {}
+
+
 def functions():
     folder = ROOT / "supabase/functions"
     if not folder.is_dir():

@@ -155,6 +155,28 @@ pre.be-log{margin:0;padding:12px 14px;font:12px/1.55 ui-monospace,Menlo,monospac
 .be-status{font-weight:600}
 .be-status.s200{color:var(--ok)} .be-status.s400{color:var(--warn)} .be-status.s500{color:var(--bad)}
 .revert{margin-left:8px}
+/* 建置進度明細 */
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:#f6f5fb}
+tr.clickable td:first-child::before{content:"▸";color:var(--faint);margin-right:6px;display:inline-block;transition:transform .15s}
+tr.clickable.open td:first-child::before{transform:rotate(90deg)}
+tr.detail > td{background:#faf9fc;padding:12px 14px 16px}
+.dt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.dt-grid section{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.dt-grid h4{font-size:12.5px;color:var(--muted);font-weight:600;margin:0 0 8px}
+.dt-spec{font-size:13px;line-height:1.65;overflow-x:auto}
+.dt-spec h1,.dt-spec h2,.dt-spec h3,.dt-spec h4{font-size:13.5px;margin:4px 0 6px;color:var(--ink)}
+.dt-spec p{margin:0 0 8px}.dt-spec ul,.dt-spec ol{margin:0 0 8px;padding-left:1.3em}
+.dt-spec table,.dt-act table{border-collapse:collapse;width:100%;font-size:12.5px}
+.dt-spec th,.dt-spec td,.dt-act th,.dt-act td{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top;word-break:break-word}
+.dt-spec th,.dt-act th{background:#f6f5f9;font-weight:600}
+.dt-spec td:nth-child(-n+2),.dt-spec th:nth-child(-n+2),.dt-act td:nth-child(-n+2),.dt-act th:nth-child(-n+2){white-space:nowrap;word-break:normal}
+.dt-spec code,.dt-act code{background:#f0eff5;border-radius:4px;padding:0 4px}
+.dt-spec pre{background:#f6f5f9;border-radius:6px;padding:8px;overflow:auto;font-size:12px}
+.dt-act tr.extra td{background:#fff6ea}
+.dt-diff{margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#fff7ed;color:#8a4b0f;font-size:12.5px}
+.dt-diff.ok{background:#eef8f2;color:var(--ok)}
+.dt-note{color:var(--muted);font-size:12.5px}
 /* APP 分頁 */
 .phone-wrap{flex:1;min-height:0;background:#eceaf2;overflow:hidden;position:relative}
 .phone{position:absolute;left:50%;top:50%;transform-origin:center center;border:12px solid #1d1b2b;border-radius:44px;background:#fff;box-shadow:0 18px 50px rgba(20,18,40,.25);overflow:hidden}
@@ -703,13 +725,15 @@ async function renderProgress(){
   v.innerHTML = `<div class="be-pad">
     ${!p.running ? setupCard().replace('<div class="be-pad">', '<div style="margin-bottom:16px">') : ''}
     <h3>「${esc(S.req)}」後端 ${done} / ${back.length}</h3>
-    ${back.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th></tr></thead><tbody>${back.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state}">${label[i.state]}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列後端項目。</p>'}
+    ${back.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th></tr></thead><tbody>${back.map(i => `<tr${detailAttrs(i)}><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state}">${label[i.state]}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列後端項目。</p>'}
     ${p.error ? `<p class="st-todo">${esc(p.error)}</p>` : ''}
     ${later.length ? `<h3>網站（第三階段）</h3><table class="be"><tbody>${later.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-later">之後的階段</td></tr>`).join('')}</tbody></table>` : ''}
+    ${back.some(i => DETAIL_KINDS.includes(i.kind)) ? '<p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">點資料表或資料庫函式，對照技術規格與目前實作的欄位。</p>' : ''}
     <h3>資料庫遷移檔（${p.migrations.length}）</h3>
     ${p.migrations.length ? `<table class="be"><tbody>${p.migrations.slice(-8).reverse().map(m => `<tr><td>${esc(m)}</td></tr>`).join('')}</tbody></table>` : '<p>還沒有。選「開發」→「後端」開始。</p>'}
   </div>`;
   bindSetup();
+  bindDetailRows(v);
 }
 
 async function renderAuth(){
@@ -1088,8 +1112,9 @@ async function svcProgress(role){
   const hint = {web: svc?.adapter === 'nextjs' ? '判斷方式：Next.js 的 app／pages 資料夾結構，或程式裡的 <code>pm-page: /路由</code> 標記。' : '判斷方式：程式裡的 <code>pm-page: /路由</code> 註解標記。',
     app: '判斷方式：畫面檔裡的 <code>pm-screen: 代號</code> 註解標記。', backend: '判斷方式：程式裡的 <code>pm-endpoint: GET /路徑</code> 註解標記，或服務啟動時的 OpenAPI 文件。'}[role];
   v.innerHTML = `<div class="be-pad"><h3>「${esc(S.req)}」${esc(svc?.label || '')} ${items.filter(i => i.state === 'done').length} / ${items.length}</h3>
-    ${items.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th><th>位置</th></tr></thead><tbody>${items.map(i => `<tr><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state === 'manual' ? 'unknown' : i.state}">${lab[i.state] || i.state}</td><td>${esc(i.where || '')}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列這個服務的項目。</p>'}
-    <p style="color:var(--muted);font-size:12.5px;margin-top:10px">${hint}</p></div>`;
+    ${items.length ? `<table class="be"><thead><tr><th>類型</th><th>名稱</th><th>狀態</th><th>位置</th></tr></thead><tbody>${items.map(i => `<tr${detailAttrs(i)}><td>${esc(i.label)}</td><td>${esc(i.name)}</td><td class="st-${i.state === 'manual' ? 'unknown' : i.state}">${lab[i.state] || i.state}</td><td>${esc(i.where || '')}</td></tr>`).join('')}</tbody></table>` : '<p>技術規格沒有列這個服務的項目。</p>'}
+    <p style="color:var(--muted);font-size:12.5px;margin-top:10px">${hint}${role === 'backend' ? ' 點資料表或 API，對照技術規格與目前實作。' : ''}</p></div>`;
+  bindDetailRows(v);
 }
 async function svcApi(role){
   const st = svcState(role), svc = curSvc(role), v = $('#svc-view-' + role); v.className = 'be-view';
@@ -1237,6 +1262,68 @@ setInterval(async () => {
   if (QA.view === 'logs') qaLogs(false);
   else if (running && !(QA.data?.services || []).some(s => s.running)) renderQa();
 }, 3000);
+
+
+/* ── 建置進度明細：點資料表或 API，對照規格與實作 ── */
+const DETAIL_KINDS = ['tables', 'endpoints', 'rpc'];
+function detailAttrs(i){ return DETAIL_KINDS.includes(i.kind) ? ` class="clickable" data-dkind="${esc(i.kind)}" data-dname="${esc(i.name)}" tabindex="0" title="看規格與實作"` : ''; }
+function fieldsTable(cols, extra){
+  if (!cols || !cols.length) return '<p class="dt-note">沒有欄位資料。</p>';
+  return `<table><thead><tr><th>欄位</th><th>型別</th><th>必填</th><th>預設</th><th>備註</th></tr></thead><tbody>${cols.map(c =>
+    `<tr class="${extra && extra.includes(c.name) ? 'extra' : ''}"><td><code>${esc(c.name)}</code></td><td>${esc(c.type)}</td><td>${c.required ? '是' : ''}</td><td>${esc(c.default ?? '')}</td><td>${esc(c.note || '')}</td></tr>`).join('')}</tbody></table>`;
+}
+function actualHtml(d){
+  const a = d.actual;
+  if (!a) return `<p class="dt-note">${esc(d.actual_note || '讀不到實作資料。')}</p>`;
+  if (a.type === 'columns') return (a.caption ? `<p class="dt-note">${esc(a.caption)}</p>` : '') + fieldsTable(a.columns, d.diff?.actual_only) + (d.actual_note ? `<p class="dt-note" style="margin-top:6px">${esc(d.actual_note)}</p>` : '');
+  if (a.type === 'operation') return `<p style="margin:0 0 8px"><code>${esc(a.method)} ${esc(a.path)}</code>${a.summary ? ' — ' + esc(a.summary) : ''}<br><span class="dt-note">取自「${esc(a.service)}」的 OpenAPI</span></p>
+    ${a.params.length ? `<p class="dt-note">參數</p><table><thead><tr><th>名稱</th><th>位置</th><th>必填</th><th>型別</th></tr></thead><tbody>${a.params.map(x => `<tr><td><code>${esc(x.name)}</code></td><td>${esc(x.in)}</td><td>${x.required ? '是' : ''}</td><td>${esc(x.type)}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${a.body ? `<p class="dt-note" style="margin-top:8px">請求內容</p>${fieldsTable(a.body)}` : ''}
+    ${a.responses.length ? `<p class="dt-note" style="margin-top:8px">回應</p>${a.responses.map(r => `<div style="margin-bottom:6px"><strong>${esc(r.code)}</strong> ${esc(r.description)}${r.fields.length ? fieldsTable(r.fields) : ''}</div>`).join('')}` : ''}`;
+  return '';
+}
+function detailHtml(d){
+  let diff = '';
+  if (d.diff){
+    const a = d.diff.spec_only, b = d.diff.actual_only;
+    diff = (a.length || b.length)
+      ? `<div class="dt-diff">${a.length ? `規格有、實作還沒有：<code>${a.map(esc).join('</code>、<code>')}</code>` : ''}${a.length && b.length ? '<br>' : ''}${b.length ? `實作有、規格沒寫：<code>${b.map(esc).join('</code>、<code>')}</code>（表格中以淡橘色標示）` : ''}</div>`
+      : '<div class="dt-diff ok">欄位和技術規格一致。</div>';
+  }
+  return `${diff}<div class="dt-grid">
+    <section><h4>技術規格</h4><div class="dt-spec">${d.spec_found ? d.spec_html : `<p class="dt-note">${esc(d.spec_note || '')}</p>`}</div></section>
+    <section><h4>目前實作</h4><div class="dt-act">${actualHtml(d)}</div></section></div>
+    ${d.try ? `<div style="margin-top:10px"><button class="btn" data-try='${esc(JSON.stringify(d.try))}'>在 API 測試台試試</button></div>` : ''}`;
+}
+function bindDetailRows(container){
+  container.querySelectorAll('tr.clickable').forEach(tr => {
+    const toggle = async () => {
+      const next = tr.nextElementSibling;
+      if (next && next.classList.contains('detail')){ next.remove(); tr.classList.remove('open'); return; }
+      tr.classList.add('open');
+      const cols = tr.children.length;
+      const row = document.createElement('tr'); row.className = 'detail';
+      row.innerHTML = `<td colspan="${cols}"><span class="dt-note">讀取中…</span></td>`;
+      tr.after(row);
+      try{
+        const d = await api(`/api/detail?req=${encodeURIComponent(S.req)}&kind=${encodeURIComponent(tr.dataset.dkind)}&name=${encodeURIComponent(tr.dataset.dname)}`);
+        row.firstElementChild.innerHTML = detailHtml(d);
+        const t = row.querySelector('[data-try]');
+        if (t) t.onclick = e => { e.stopPropagation(); tryInApi(JSON.parse(t.dataset.try)); };
+      }catch(e){ row.firstElementChild.innerHTML = `<span class="st-todo">${esc(e.message)}</span>`; }
+    };
+    tr.onclick = toggle;
+    tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); } };
+  });
+}
+function tryInApi(t){
+  if (t.target === 'supabase'){
+    BE.apiOut = {method: t.method, path: t.path, body: ''}; BE.view = 'api';
+    switchTab('backend'); return;
+  }
+  const st = svcState('backend'); st.sid = t.target; st.view = 'api'; st.apiOut = {method: t.method, path: t.path, body: '', headers: ''};
+  switchTab('svc-backend');
+}
 
 /* ── 啟動 ── */
 (async () => {
