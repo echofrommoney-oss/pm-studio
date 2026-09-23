@@ -250,31 +250,34 @@ def acceptance_files(req):
     return sorted(folder.glob("*.html")) if folder.is_dir() else []
 
 
-JS_ID = re.compile(r"""[\{,]\s*(?:id|acId|dataId|data_id)\s*:\s*(['"])(?P<id>[^'"]+)\1""")
-JS_TEXT = re.compile(r"""[\{,]\s*(?:title|text|name|desc|description|item|label|檢查項目|驗收項|說明)\s*:\s*(['"`])(?P<t>(?:\\.|(?!\1).)*)\1""")
+JS_ID = re.compile(r"""['"]?(?:id|acId|dataId|data_id)['"]?\s*:\s*(['"])(?P<id>[^'"]+)\1""")
+JS_TEXT = re.compile(r"""['"]?(?:title|text|name|desc|description|item|label|檢查項目|驗收項|說明)['"]?\s*:\s*(['"`])(?P<t>(?:\\.|(?!\1).)*)\1""")
 
 
-def _js_items(html):
-    """驗收清單常把項目寫成 JavaScript 資料陣列、開啟網頁時才畫出來。
-    直接從原始碼讀那些物件：抓 id，以及同一個物件裡第一個像描述的欄位。"""
+def _js_objects(html):
+    """把原始碼裡看起來像驗收項的物件抓出來，連巢狀的也要（模組底下才是驗收項）。
+    回傳 [(巢狀深度, 編號, 描述)]。"""
     out = []
     for m in JS_ID.finditer(html):
         ac_id = m.group("id").strip()
-        if not ac_id or not re.search(r"[\w\u4e00-\u9fff]", ac_id):
+        if not ac_id or "${" in ac_id or not re.search(r"[\w\u4e00-\u9fff]", ac_id):
             continue
-        # 物件範圍：從這個 id 往前找 {，往後找對應的 }
-        start = m.start() if html[m.start()] == "{" else html.rfind("{", 0, m.start())
-        depth, i = 1, (start + 1 if start >= 0 else m.end())
-        while depth and i < len(html) and i - m.start() < 4000:
+        start = html.rfind("{", 0, m.start())
+        if start < 0:
+            continue
+        depth, i = 1, start + 1
+        while depth and i < len(html) and i - start < 20000:
             if html[i] == "{":
                 depth += 1
             elif html[i] == "}":
                 depth -= 1
             i += 1
-        obj = html[start:i] if start >= 0 else html[m.start():m.start() + 400]
+        obj = html[start:i]
+        # 這個物件裡面還有帶 id 的子物件 → 它是分類（模組），不是驗收項
+        inner = [x for x in JS_ID.finditer(obj) if x.start() != m.start() - start]
         t = JS_TEXT.search(obj)
         text = re.sub(r"\s+", " ", (t.group("t") if t else "")).strip()
-        out.append({"id": ac_id, "text": text[:120]})
+        out.append({"id": ac_id, "text": text[:120], "container": bool(inner)})
     return out
 
 
@@ -292,7 +295,9 @@ def acceptance_items(req):
                 continue
             found.append({"id": ac_id, "text": _inner_text(html, m.group(1), m.end())})
         if len(found) <= 1:                        # 靜態幾乎沒有 → 多半是動態產生
-            found = _js_items(html) or found
+            objs = _js_objects(html)
+            leaves = [o for o in objs if not o["container"]]
+            found = leaves or objs or found        # 只取最內層：模組標題不是驗收項
         for it in found:
             if it["id"] and it["id"] not in seen:
                 seen.add(it["id"])
