@@ -113,7 +113,7 @@ python3 install.py --all
 
 ## GitHub
 
-- **安裝時自動建立儲存庫**：`python3 install.py --project 路徑 --github private`。會用 `gh` 在 GitHub 建立私人儲存庫、連好並推送；選擇會記住，之後新專案自動沿用（`--github off` 可關掉）。儲存庫名稱預設由資料夾名推導，中文資料夾請用 `--repo-name` 指定英文名。需要先 `brew install gh` 並 `gh auth login`。
+- **安裝時自動建立儲存庫**：`python3 install.py --project 路徑 --github private`。會用 `gh` 在 GitHub 建立私人儲存庫、連好並推送。`private` 與 `off` 會記住，之後新專案自動沿用；**`public` 每次都要重新指定**（避免接案專案忘了帶參數就變成公開），而且建立公開儲存庫時會自動關閉該專案的自動推送。儲存庫名稱預設由資料夾名推導，中文資料夾請用 `--repo-name` 指定英文名。需要先安裝 GitHub CLI（macOS：`brew install gh`；Windows：`winget install GitHub.cli`）並 `gh auth login`。
 - **自動推送**：工作台每輪工作結束後會自動 `git push`（`.pm-console/config.json` 的 `auto_push`，預設開啟；沒連遠端就不動作）。推送由工作台執行，Claude 的 `git push` 一律封鎖。
 - **狀態一目了然**：工作台標題列與專案總覽都會顯示「GitHub 已同步」或「N 個提交未推送」，旁邊有推送按鈕。推送失敗（需要登入、遠端比較新）會直接說明怎麼處理。
 

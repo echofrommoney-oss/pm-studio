@@ -85,6 +85,7 @@ DEFAULT_CONFIG = {
     ],
     "use_subscription": True,
     "auto_push": True,          # 每輪工作結束後，把提交推到 GitHub（要先連好遠端；失敗只提示不中斷）
+                                # 公開儲存庫請設成 false：自動推送等於每輪工作都即時公開，沒有先看過再發的機會
     # 工作台找不到某個工具時，把它所在的資料夾加在這裡，例如 ["~/development/flutter/bin"]
     "extra_path": [],
     "auto_start_export_service": True,

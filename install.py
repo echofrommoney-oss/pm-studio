@@ -105,15 +105,31 @@ def user_setting(key, value=None):
     return value
 
 
+def set_project_setting(root, key, value):
+    """改專案的工作台設定（.pm-console/config.json）。檔案還不存在時先建。"""
+    import json
+    path = root / ".pm-console" / "config.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+    data[key] = value
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def setup_github(root, choice, repo_name=None):
     """在 GitHub 建立儲存庫並連好。只有明確選過 private／public 才會做。"""
     import re, shutil
     choice = choice or user_setting("github")
     if choice in (None, "off"):
         if choice is None:
-            print("\n（要讓每個新專案自動在 GitHub 建立私人儲存庫：加參數 --github private，之後會沿用這個選擇）")
+            print("\n（要讓每個新專案自動在 GitHub 建立私人儲存庫：加參數 --github private，之後會沿用這個選擇；"
+                  "--github public 基於安全考量每次都要重新指定）")
         return
-    user_setting("github", choice)
+    # public 不記住：接案專案忘了帶參數就變成公開，配上自動推送等於把 PRD 與訪談逐字稿直接公開
+    if choice in ("private", "off"):
+        user_setting("github", choice)
     print("\n══ GitHub ══")
 
     def git(*a):
@@ -127,7 +143,8 @@ def setup_github(root, choice, repo_name=None):
         print(f"✅ 已經連到遠端：{url}")
         return
     if not shutil.which("gh"):
-        print("⚠️  找不到 gh 指令。執行 brew install gh 並 gh auth login 後重跑安裝器即可。")
+        install_cmd = "winget install GitHub.cli" if sys.platform.startswith("win") else "brew install gh"
+        print(f"⚠️  找不到 gh 指令。執行 {install_cmd} 並 gh auth login 後重跑安裝器即可。")
         return
     if subprocess.run(["gh", "auth", "status"], capture_output=True).returncode != 0:
         print("⚠️  gh 還沒登入。執行 gh auth login 後重跑安裝器即可。")
@@ -142,6 +159,10 @@ def setup_github(root, choice, repo_name=None):
     out = (r.stdout + r.stderr).strip()
     if r.returncode == 0:
         print(f"✅ 已建立{'私人' if choice == 'private' else '公開'}儲存庫並推送：{name}")
+        if choice == "public":
+            set_project_setting(root, "auto_push", False)
+            print("   這是公開儲存庫，已關閉自動推送：每輪工作結束不會自動公開，要自己確認後再 git push。")
+            print("   （之後每個新專案要公開都得再加一次 --github public，不會被記住）")
     elif "Name already exists" in out or "already exists" in out:
         print(f"⚠️  GitHub 上已經有同名儲存庫 {name}。用 --repo-name 換個名字，或自己執行：\n"
               f"     git -C \"{root}\" remote add origin <網址> && git -C \"{root}\" push -u origin HEAD")
