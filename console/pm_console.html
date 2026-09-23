@@ -1235,7 +1235,22 @@ function renderQa(){
 function qaAccept(v, d){
   if (!S.req){ v.innerHTML = '<div class="be-pad">先在左邊選一個需求。</div>'; return; }
   const items = d.acceptance || [];
-  if (!items.length){ v.innerHTML = `<div class="be-pad"><div class="be-card"><strong>「${esc(S.req)}」還沒有驗收清單</strong><p>選「QA」→「驗收清單」產出後，這裡會列出每個驗收項有沒有自動測試、有沒有通過。</p></div></div>`; return; }
+  if (!items.length){
+    const files = d.acceptance_files || [];
+    v.innerHTML = files.length
+      ? `<div class="be-pad"><div class="be-card"><strong>驗收清單裡沒有工作台認得的編號</strong>
+          <p>找到 ${files.length} 份清單（${files.map(esc).join('、')}），但每個驗收項上沒有 <code>data-id</code> 編號，所以沒辦法對照自動測試。</p>
+          <p>編號格式是「一級模組-二級功能-序號」，例如 <code>提醒-新增-1</code>，放在該驗收項的元素上；自動測試的名稱帶 <code>[驗收 ${esc(S.req)}:提醒-新增-1]</code> 就會對應過來。</p>
+          <button class="btn primary" id="qa-addid">請 Claude 補上編號</button></div></div>`
+      : `<div class="be-pad"><div class="be-card"><strong>「${esc(S.req)}」還沒有驗收清單</strong><p>選「QA」→「驗收清單」產出後，這裡會列出每個驗收項有沒有自動測試、有沒有通過。</p></div></div>`;
+    const b = $('#qa-addid');
+    if (b) b.onclick = () => {
+      pickWorkflow('acceptance');
+      $('#input').value = `請幫「${S.req}」的驗收清單補上編號：每個驗收項的元素加 data-id="一級模組-二級功能-序號"（只用中英文、數字與連字號，例如 提醒-新增-1），編號要穩定、不重複，勾選進度（localStorage）不要失效。補完列出所有編號與對應的驗收項給我。`;
+      autosize(); $('#input').focus();
+    };
+    return;
+  }
   const cnt = k => items.filter(i => i.state === k).length;
   const covered = items.length - cnt('none');
   const lab = {passed: '✓ 通過', failed: '✗ 失敗', partial: '部分略過', none: '沒有自動測試'};

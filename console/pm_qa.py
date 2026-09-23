@@ -220,17 +220,83 @@ def _summary(tests):
 
 # ───────────── 驗收清單對照 ─────────────
 
-def acceptance_items(req):
-    """從驗收清單 HTML 讀出驗收項（data-id 與文字）。"""
+ID_ATTR = re.compile(r'<(\w+)([^>]*?\b(?:data-id|data-ac|data-item|data-acceptance)\s*=\s*"([^"]+)"[^>]*)>', re.I)
+
+
+def _inner_text(html, tag, start):
+    """從開始標籤之後取到對應的結束標籤（會處理同名標籤的巢狀）。"""
+    depth, i = 1, start
+    open_tag = re.compile(r"<" + tag + r"\b", re.I)
+    close_tag = re.compile(r"</" + tag + r"\s*>", re.I)
+    while depth and i < len(html):
+        o, c = open_tag.search(html, i), close_tag.search(html, i)
+        if not c:
+            break
+        if o and o.start() < c.start():
+            depth += 1
+            i = o.end()
+        else:
+            depth -= 1
+            i = c.end()
+            if not depth:
+                text = html[start:c.start()]
+                text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", text, flags=re.S | re.I)
+                return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text)).strip()
+    return ""
+
+
+def acceptance_files(req):
     folder = ROOT / req / "驗收清單"
-    items = []
-    for f in sorted(folder.glob("*.html")) if folder.is_dir() else []:
+    return sorted(folder.glob("*.html")) if folder.is_dir() else []
+
+
+JS_ID = re.compile(r"""[\{,]\s*(?:id|acId|dataId|data_id)\s*:\s*(['"])(?P<id>[^'"]+)\1""")
+JS_TEXT = re.compile(r"""[\{,]\s*(?:title|text|name|desc|description|item|label|檢查項目|驗收項|說明)\s*:\s*(['"`])(?P<t>(?:\\.|(?!\1).)*)\1""")
+
+
+def _js_items(html):
+    """驗收清單常把項目寫成 JavaScript 資料陣列、開啟網頁時才畫出來。
+    直接從原始碼讀那些物件：抓 id，以及同一個物件裡第一個像描述的欄位。"""
+    out = []
+    for m in JS_ID.finditer(html):
+        ac_id = m.group("id").strip()
+        if not ac_id or not re.search(r"[\w\u4e00-\u9fff]", ac_id):
+            continue
+        # 物件範圍：從這個 id 往前找 {，往後找對應的 }
+        start = m.start() if html[m.start()] == "{" else html.rfind("{", 0, m.start())
+        depth, i = 1, (start + 1 if start >= 0 else m.end())
+        while depth and i < len(html) and i - m.start() < 4000:
+            if html[i] == "{":
+                depth += 1
+            elif html[i] == "}":
+                depth -= 1
+            i += 1
+        obj = html[start:i] if start >= 0 else html[m.start():m.start() + 400]
+        t = JS_TEXT.search(obj)
+        text = re.sub(r"\s+", " ", (t.group("t") if t else "")).strip()
+        out.append({"id": ac_id, "text": text[:120]})
+    return out
+
+
+def acceptance_items(req):
+    """從驗收清單讀出驗收項（編號與文字）。
+    先讀 HTML 裡的 data-id（也認 data-ac / data-item / data-acceptance）；
+    項目是用 JavaScript 動態產生時，改從原始碼的資料陣列讀。"""
+    items, seen = [], set()
+    for f in acceptance_files(req):
         html = f.read_text(encoding="utf-8", errors="ignore")
-        for m in re.finditer(r'<(\w+)[^>]*\bdata-id="([^"]+)"[^>]*>(.*?)</\1>', html, re.S):
-            text = re.sub(r"<[^>]+>", " ", m.group(3))
-            text = re.sub(r"\s+", " ", text).strip()
-            if m.group(2) not in [i["id"] for i in items]:
-                items.append({"id": m.group(2), "text": text[:120]})
+        found = []
+        for m in ID_ATTR.finditer(html):
+            ac_id = m.group(3).strip()
+            if "${" in ac_id or "{{" in ac_id:     # 樣板變數，不是真的編號
+                continue
+            found.append({"id": ac_id, "text": _inner_text(html, m.group(1), m.end())})
+        if len(found) <= 1:                        # 靜態幾乎沒有 → 多半是動態產生
+            found = _js_items(html) or found
+        for it in found:
+            if it["id"] and it["id"] not in seen:
+                seen.add(it["id"])
+                items.append({"id": it["id"], "text": it["text"][:120]})
     return items
 
 
@@ -253,6 +319,7 @@ def results(project_id, req=None):
     if req:
         mine = [t for t in all_tests if any(a["req"] == req for a in t["acceptance"])]
         items = acceptance_items(req)
+        out["acceptance_files"] = [f.relative_to(ROOT).as_posix() for f in acceptance_files(req)]
         cover = []
         for it in items:
             linked = [t for t in mine if any(a["req"] == req and a["id"] == it["id"] for a in t["acceptance"])]
