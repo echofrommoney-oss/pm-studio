@@ -285,23 +285,31 @@ ROW = re.compile(r"""\[\s*(['"])(?P<level>P[0-9]|[A-Z][\w-]{0,8})\1\s*,\s*(['"`]
 
 
 def _js_rows(html):
-    """驗收項寫成 ['P0', '描述'] 這種陣列、沒有各自編號時，
-    用它所屬群組的 id 加序號推導出穩定編號（和畫面上產生的一致）：群組id-序號。"""
+    """驗收項寫成 ['P0', '描述'] 這種陣列、沒有各自編號時，用結構推導穩定編號。
+    主編號用「模組-群組-序號」（和 Claude 寫測試時的推導一致），
+    另外記一個「群組-序號」的別名，兩種寫法的測試都對得上。"""
     objs = [(m.start(), m.group("id")) for m in JS_ID.finditer(html)
             if m.group("id") and "${" not in m.group("id")]
+    # 模組是最外層的 id（它底下還有帶 id 的子物件），群組是最內層
+    containers = {o["id"] for o in _js_objects(html) if o["container"]}
     out, counters = [], {}
     for m in ROW.finditer(html):
-        group = ""
-        for pos, gid in objs:            # 這一列之前最近的一個 id，就是它所屬的群組
-            if pos < m.start():
-                group = gid
-            else:
+        module = group = ""
+        for pos, gid in objs:
+            if pos >= m.start():
                 break
-        if not group:
+            if gid in containers:
+                module, group = gid, ""       # 進到新的模組
+            else:
+                group = gid
+        if not group and not module:
             continue
-        counters[group] = counters.get(group, 0) + 1
+        prefix = "-".join(x for x in (module, group) if x)
+        counters[prefix] = counters.get(prefix, 0) + 1
+        n = counters[prefix]
         text = re.sub(r"\s+", " ", m.group("text")).strip()
-        out.append({"id": f"{group}-{counters[group]}", "text": text[:120],
+        aliases = [f"{group}-{n}"] if group and module else []
+        out.append({"id": f"{prefix}-{n}", "aliases": aliases, "text": text[:120],
                     "level": m.group("level"), "container": False})
     return out
 
@@ -327,6 +335,7 @@ def acceptance_items(req):
             if it["id"] and it["id"] not in seen:
                 seen.add(it["id"])
                 items.append({"id": it["id"], "text": it["text"][:120],
+                              "aliases": it.get("aliases") or [],
                               **({"level": it["level"]} if it.get("level") else {})})
     return items
 
@@ -353,11 +362,12 @@ def results(project_id, req=None):
         out["acceptance_files"] = [f.relative_to(ROOT).as_posix() for f in acceptance_files(req)]
         cover = []
         for it in items:
-            linked = [t for t in mine if any(a["req"] == req and a["id"] == it["id"] for a in t["acceptance"])]
+            names = {it["id"], *it.get("aliases", [])}
+            linked = [t for t in mine if any(a["req"] == req and a["id"] in names for a in t["acceptance"])]
             st = "none" if not linked else ("failed" if any(t["status"] in ("failed", "error") for t in linked)
                                              else "passed" if all(t["status"] == "passed" for t in linked) else "partial")
             cover.append({**it, "state": st, "tests": [t["name"] for t in linked]})
-        known = {it["id"] for it in items}
+        known = {n for it in items for n in (it["id"], *it.get("aliases", []))}
         orphan = sorted({a["id"] for t in mine for a in t["acceptance"] if a["req"] == req and a["id"] not in known})
         out.update({"acceptance": cover, "req_tests": mine, "orphan_tags": orphan,
                     "other_failed": [t for t in all_tests if t not in mine and t["status"] in ("failed", "error")]})
