@@ -251,7 +251,8 @@
     "44a4b7c62ebc9b78d08fa5a86a1f5716ac887afe2cb3652069fff8030ed0e3e2"
   ],
   "workflows/pm-qa.md": [
-    "360e1f726193dbd2d6aa2e7ecdc8af76c6652aaf95fba7faca16a745fbec7640"
+    "360e1f726193dbd2d6aa2e7ecdc8af76c6652aaf95fba7faca16a745fbec7640",
+    "536868a5ad141fa5ec22e750f0c742c32f662e497df274dd012a128220c4d82a"
   ],
   "scripts/pm_shot.py": [
     "fc547b64c6e9afd8f611d7dcc0785f768b575de07ff0c3bb8d0482fdc2ce934e"

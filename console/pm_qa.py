@@ -281,6 +281,31 @@ def _js_objects(html):
     return out
 
 
+ROW = re.compile(r"""\[\s*(['"])(?P<level>P[0-9]|[A-Z][\w-]{0,8})\1\s*,\s*(['"`])(?P<text>(?:\\.|(?!\3).)*)\3\s*,?\s*\]""", re.S)
+
+
+def _js_rows(html):
+    """驗收項寫成 ['P0', '描述'] 這種陣列、沒有各自編號時，
+    用它所屬群組的 id 加序號推導出穩定編號（和畫面上產生的一致）：群組id-序號。"""
+    objs = [(m.start(), m.group("id")) for m in JS_ID.finditer(html)
+            if m.group("id") and "${" not in m.group("id")]
+    out, counters = [], {}
+    for m in ROW.finditer(html):
+        group = ""
+        for pos, gid in objs:            # 這一列之前最近的一個 id，就是它所屬的群組
+            if pos < m.start():
+                group = gid
+            else:
+                break
+        if not group:
+            continue
+        counters[group] = counters.get(group, 0) + 1
+        text = re.sub(r"\s+", " ", m.group("text")).strip()
+        out.append({"id": f"{group}-{counters[group]}", "text": text[:120],
+                    "level": m.group("level"), "container": False})
+    return out
+
+
 def acceptance_items(req):
     """從驗收清單讀出驗收項（編號與文字）。
     先讀 HTML 裡的 data-id（也認 data-ac / data-item / data-acceptance）；
@@ -297,11 +322,12 @@ def acceptance_items(req):
         if len(found) <= 1:                        # 靜態幾乎沒有 → 多半是動態產生
             objs = _js_objects(html)
             leaves = [o for o in objs if not o["container"]]
-            found = leaves or objs or found        # 只取最內層：模組標題不是驗收項
+            found = _js_rows(html) or leaves or objs or found
         for it in found:
             if it["id"] and it["id"] not in seen:
                 seen.add(it["id"])
-                items.append({"id": it["id"], "text": it["text"][:120]})
+                items.append({"id": it["id"], "text": it["text"][:120],
+                              **({"level": it["level"]} if it.get("level") else {})})
     return items
 
 

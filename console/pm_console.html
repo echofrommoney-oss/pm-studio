@@ -1269,8 +1269,8 @@ function qaAccept(v, d){
   const cls = {passed: 'st-done', failed: 'st-todo', partial: 'st-later', none: 'st-later'};
   v.innerHTML = `<div class="be-pad">
     <h3>「${esc(S.req)}」驗收項 ${items.length} 個：${covered} 個有自動測試，${cnt('passed')} 個通過${cnt('failed') ? `，<span class="st-todo">${cnt('failed')} 個失敗</span>` : ''}</h3>
-    <table class="be"><thead><tr><th>編號</th><th>驗收項</th><th>自動測試</th><th>對應測試</th></tr></thead><tbody>
-    ${items.map(i => `<tr><td style="white-space:nowrap">${esc(i.id)}</td><td>${esc(i.text)}</td><td class="${cls[i.state]}" style="white-space:nowrap">${lab[i.state]}</td><td>${i.tests.map(esc).join('<br>')}</td></tr>`).join('')}
+    <table class="be"><thead><tr><th>編號</th>${items.some(i => i.level) ? '<th>等級</th>' : ''}<th>驗收項</th><th>自動測試</th><th>對應測試</th></tr></thead><tbody>
+    ${items.map(i => `<tr><td style="white-space:nowrap">${esc(i.id)}</td>${items.some(x => x.level) ? `<td>${esc(i.level || '')}</td>` : ''}<td>${esc(i.text)}</td><td class="${cls[i.state]}" style="white-space:nowrap">${lab[i.state]}</td><td>${i.tests.map(esc).join('<br>')}</td></tr>`).join('')}
     </tbody></table>
     ${(d.orphan_tags || []).length ? `<p class="st-todo" style="font-size:12.5px;margin-top:10px">有測試標了驗收清單裡找不到的編號：${d.orphan_tags.map(esc).join('、')}。可能是驗收清單改過，選「QA」→「自動測試」請 Claude 對齊。</p>` : ''}
     <p style="color:var(--muted);font-size:12.5px;margin-top:10px">沒有自動測試的項目仍要在驗收清單人工勾選。測試名稱帶 <code>[驗收 ${esc(S.req)}:編號]</code> 就會對應到這裡。</p></div>`;
