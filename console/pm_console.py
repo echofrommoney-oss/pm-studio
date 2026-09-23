@@ -74,6 +74,7 @@ DEFAULT_CONFIG = {
         "Bash(sh:*)", "Bash(npx impeccable:*)", "Bash(.claude/skills/impeccable/scripts/impeccable:*)",
         "Bash(*/.claude/skills/impeccable/scripts/impeccable:*)", "Bash(grep:*)", "Bash(rm:*)",
         "Bash(git status:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)",
+        "Bash(git mv:*)", "Bash(git rm:*)", "Bash(git add:*)",
         "Task", "WebSearch", "WebFetch", "Skill",
         "Bash(supabase status:*)", "Bash(supabase migration:*)", "Bash(supabase functions new:*)",
         "Bash(supabase gen types:*)", "Bash(supabase db lint:*)", "Bash(supabase db diff:*)",
@@ -118,6 +119,7 @@ DEFAULT_CONFIG = {
         "Bash(supabase link:*)", "Bash(supabase db push:*)", "Bash(supabase functions deploy:*)",
         "Bash(supabase secrets set:*)", "Bash(supabase projects:*)", "Bash(supabase login:*)",
         "Bash(git push:*)", "Bash(git reset:*)", "Bash(git checkout:*)", "Bash(git clean:*)",
+        "Bash(git restore:*)", "Bash(git rebase:*)", "Bash(git filter-branch:*)",
         "Bash(flutter run:*)", "Bash(flutter emulators --launch:*)",
     ],
 }
