@@ -84,6 +84,7 @@ DEFAULT_CONFIG = {
         "Bash(dart format:*)", "Bash(dart fix:*)", "Bash(dart analyze:*)", "Bash(dart run build_runner:*)",
     ],
     "use_subscription": True,
+    "auto_push": True,          # 每輪工作結束後，把提交推到 GitHub（要先連好遠端；失敗只提示不中斷）
     # 工作台找不到某個工具時，把它所在的資料夾加在這裡，例如 ["~/development/flutter/bin"]
     "extra_path": [],
     "auto_start_export_service": True,
@@ -532,6 +533,55 @@ def git(*args, timeout=60):
         return -1, "", str(e)
 
 
+def git_remote():
+    code, url, _ = git("remote", "get-url", "origin")
+    return url if code == 0 else ""
+
+
+def unpushed():
+    """尚未推送的提交數；沒有遠端或沒設定上游時回傳 None。"""
+    if not git_remote():
+        return None
+    code, out, _ = git("rev-list", "--count", "@{u}..HEAD")
+    return int(out) if code == 0 and out.isdigit() else None
+
+
+def push_now():
+    """把目前分支推到遠端。回傳 (成功, 訊息)。"""
+    if not git_remote():
+        return False, "這個專案還沒連到 GitHub。"
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    try:
+        args = ["git", "-C", str(ROOT), "push"]
+        if git("rev-parse", "--abbrev-ref", "@{u}")[0] != 0:   # 還沒設定上游
+            branch = git("rev-parse", "--abbrev-ref", "HEAD")[1] or "HEAD"
+            args = ["git", "-C", str(ROOT), "push", "-u", "origin", branch]
+        r = subprocess.run(args, capture_output=True, text=True, timeout=180, env=env)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, f"推送失敗：{e}"
+    if r.returncode == 0:
+        return True, "已推送到 GitHub。"
+    err = (r.stderr or r.stdout).strip().splitlines()
+    msg = err[-1] if err else "未知錯誤"
+    if "could not read Username" in " ".join(err) or "Authentication" in " ".join(err):
+        msg = "GitHub 需要登入：在終端機執行 gh auth login 後，到專案資料夾執行一次 git push。"
+    elif "rejected" in " ".join(err):
+        msg = "遠端有你這邊沒有的提交，請在終端機執行 git pull 後再推。"
+    return False, "推送失敗：" + msg
+
+
+def auto_push(req):
+    cfg = load_config()
+    if not cfg.get("auto_push", True) or not git_remote():
+        return
+
+    def job():
+        ok, msg = push_now()
+        if not ok:
+            append_chat(req, {"role": "divider", "text": msg, "time": time.time()})
+    threading.Thread(target=job, daemon=True).start()
+
+
 def git_snapshot(label):
     """開發類工作前：工作區有未提交的變動就先提交一次，記下起點。回傳起點 commit 或 None。"""
     if git("rev-parse", "--is-inside-work-tree")[1] != "true":
@@ -670,6 +720,7 @@ def start_run(cfg, req, workflow, message):
                           "cost": final.get("cost"), "time": time.time(),
                           "seconds": round(time.time() - run.started),
                           **({"base": run.base} if getattr(run, "base", None) else {})})
+        auto_push(req)
         with run.cond:
             run.done = True
             run.events.append({"t": "end", "i": len(run.events)})
@@ -1058,6 +1109,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(500, {"error": str(e)})
                 CURRENT["run"] = run
             return self._send(200, {"ok": True, "run": run.id})
+        if path == "/api/git/push":
+            ok, msg = push_now()
+            return self._send(200 if ok else 409, {"ok": ok, "message": msg} if ok else {"error": msg})
         if path == "/api/stop":
             run = CURRENT["run"]
             if run and not run.done:
@@ -1158,6 +1212,7 @@ def state_payload():
     alive = export_service_alive()
     return {
         "code_updated": updated,
+        "git": {"remote": git_remote(), "unpushed": unpushed(), "auto_push": bool(cfg.get("auto_push", True))},
         "project": cfg.get("project_name") or ROOT.name,
         "claude": bool(find_claude(cfg)),
         "workflow_installed": (ROOT / ".agents/workflows").is_dir(),

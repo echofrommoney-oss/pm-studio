@@ -146,6 +146,9 @@ function render(projects){
             <div class="facts">
               <span><span class="dot ${p.has_design?'ok':'warn'}"></span>${p.has_design?'設計系統已建立':'尚未定設計方向'}</span>
               <span><span class="dot ${p.console?'ok':''}"></span>${p.console?'工作台開著':'工作台未開'}</span>
+              <span>${!p.git?.remote ? '<span class="dot"></span>未連到 GitHub'
+                : p.git.unpushed ? `<span class="dot warn"></span>${p.git.unpushed} 個提交未推送 <button class="linkbtn" data-push="${esc(p.path)}">推送</button>`
+                : '<span class="dot ok"></span>GitHub 已同步'}</span>
               <span>${p.uncommitted === null ? '<span class="dot"></span>未使用 git' : p.uncommitted ? `<span class="dot warn"></span>${p.uncommitted} 個檔案未提交` : '<span class="dot ok"></span>git 已全部提交'}</span>
               <span>最近更新 ${ago(p.updated)}</span>
             </div>
@@ -161,6 +164,11 @@ function render(projects){
     </section>`;
   }).join('');
   document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openConsole(b));
+  document.querySelectorAll('[data-push]').forEach(b => b.onclick = async () => {
+    b.disabled = true; b.textContent = '推送中…';
+    try{ await post('/api/push', {path: b.dataset.push}); toast('已推送'); }catch(e){ toast(e.message); }
+    load();
+  });
   document.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
     if (!confirm('從總覽移除這個專案？檔案不會被刪除，之後開啟它的工作台會自動加回來。')) return;
     await post('/api/remove', {path: b.dataset.remove}).catch(e => toast(e.message)); load();

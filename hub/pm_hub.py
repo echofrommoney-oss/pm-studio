@@ -82,6 +82,42 @@ def console_url(root):
     return None
 
 
+def git_info(root):
+    def g(*a):
+        try:
+            return subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            return subprocess.CompletedProcess(a, 1, "", "")
+    if g("rev-parse", "--is-inside-work-tree").stdout.strip() != "true":
+        return {"repo": False}
+    remote = g("remote", "get-url", "origin").stdout.strip()
+    if not remote:
+        return {"repo": True, "remote": ""}
+    out = g("rev-list", "--count", "@{u}..HEAD").stdout.strip()
+    return {"repo": True, "remote": remote, "unpushed": int(out) if out.isdigit() else None}
+
+
+def push_project(root):
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    def g(*a):
+        return subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True, timeout=180, env=env)
+    if not g("remote", "get-url", "origin").stdout.strip():
+        raise RuntimeError("這個專案還沒連到 GitHub。")
+    args = ["push"]
+    if g("rev-parse", "--abbrev-ref", "@{u}").returncode != 0:
+        args = ["push", "-u", "origin", g("rev-parse", "--abbrev-ref", "HEAD").stdout.strip() or "HEAD"]
+    r = g(*args)
+    if r.returncode != 0:
+        err = (r.stderr or r.stdout).strip().splitlines()
+        text = " ".join(err)
+        if "could not read Username" in text or "Authentication" in text:
+            raise RuntimeError("GitHub 需要登入：終端機執行 gh auth login 後再試。")
+        if "rejected" in text:
+            raise RuntimeError("遠端有你這邊沒有的提交，請先 git pull。")
+        raise RuntimeError("推送失敗：" + (err[-1] if err else "未知錯誤"))
+    return True
+
+
 def project_info(path):
     root = Path(path)
     if not root.is_dir():
@@ -104,6 +140,7 @@ def project_info(path):
         "console": console_url(root), "reqs": reqs, "updated": latest or root.stat().st_mtime,
         "stale": sum(len(r["stale"]) for r in reqs),
         "uncommitted": pm_sync.uncommitted(root),
+        "git": git_info(root),
     }
 
 
@@ -209,6 +246,14 @@ class Handler(BaseHTTPRequestHandler):
                        if isinstance(p, dict) and console_url(Path(p.get("path", "")))]
             return self._send(200, {"ok": r.returncode == 0, "output": (r.stdout + r.stderr)[-6000:],
                                     "running": running})
+        if path == "/api/push":
+            if target not in known:
+                return self._send(400, {"error": "不在清單裡的專案"})
+            try:
+                push_project(Path(target))
+                return self._send(200, {"ok": True})
+            except (RuntimeError, OSError) as e:
+                return self._send(409, {"error": str(e)})
         if path == "/api/remove":
             data = registry()
             data["projects"] = [p for p in data["projects"] if not (isinstance(p, dict) and p.get("path") == target)]

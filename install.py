@@ -7,6 +7,7 @@
 一個產品專案裝一套。可重複執行更新；對話紀錄、PRODUCT.md、DESIGN.md、你改過的工作流檔都會保留。
 """
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -87,6 +88,67 @@ def commit_tooling(root):
     print("✅ 已提交工具更新" if r.returncode == 0 else "⚠️ 工具更新沒有自動提交（多半是 git 作者未設定），可稍後手動提交 scripts、.agents、.claude")
 
 
+def user_setting(key, value=None):
+    """使用者層級的偏好（~/.pm-studio/config.json），例如要不要自動建立 GitHub 儲存庫。"""
+    import json, os
+    home = Path(os.environ.get("PM_STUDIO_HOME") or (Path.home() / ".pm-studio"))
+    path = home / "config.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+    if value is None:
+        return data.get(key)
+    data[key] = value
+    home.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return value
+
+
+def setup_github(root, choice, repo_name=None):
+    """在 GitHub 建立儲存庫並連好。只有明確選過 private／public 才會做。"""
+    import re, shutil
+    choice = choice or user_setting("github")
+    if choice in (None, "off"):
+        if choice is None:
+            print("\n（要讓每個新專案自動在 GitHub 建立私人儲存庫：加參數 --github private，之後會沿用這個選擇）")
+        return
+    user_setting("github", choice)
+    print("\n══ GitHub ══")
+
+    def git(*a):
+        return subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True)
+
+    if git("rev-parse", "--is-inside-work-tree").stdout.strip() != "true":
+        print("⚠️  這個專案還不是 git 儲存庫，略過。")
+        return
+    if git("remote", "get-url", "origin").returncode == 0:
+        url = git("remote", "get-url", "origin").stdout.strip()
+        print(f"✅ 已經連到遠端：{url}")
+        return
+    if not shutil.which("gh"):
+        print("⚠️  找不到 gh 指令。執行 brew install gh 並 gh auth login 後重跑安裝器即可。")
+        return
+    if subprocess.run(["gh", "auth", "status"], capture_output=True).returncode != 0:
+        print("⚠️  gh 還沒登入。執行 gh auth login 後重跑安裝器即可。")
+        return
+    name = repo_name or re.sub(r"[^A-Za-z0-9._-]", "", root.name.replace(" ", "-")).strip("-.")
+    if not name:
+        print(f"⚠️  資料夾名稱「{root.name}」沒有可用的英文字，無法自動命名。"
+              f"用 --repo-name 指定，例如 --repo-name my-product。")
+        return
+    r = subprocess.run(["gh", "repo", "create", name, "--" + choice, "--source", str(root), "--push"],
+                       capture_output=True, text=True)
+    out = (r.stdout + r.stderr).strip()
+    if r.returncode == 0:
+        print(f"✅ 已建立{'私人' if choice == 'private' else '公開'}儲存庫並推送：{name}")
+    elif "Name already exists" in out or "already exists" in out:
+        print(f"⚠️  GitHub 上已經有同名儲存庫 {name}。用 --repo-name 換個名字，或自己執行：\n"
+              f"     git -C \"{root}\" remote add origin <網址> && git -C \"{root}\" push -u origin HEAD")
+    else:
+        print("⚠️  建立儲存庫失敗：" + (out.splitlines() or [""])[-1])
+
+
 def update_all(skip):
     import json, os
     home = Path(os.environ.get("PM_STUDIO_HOME") or (Path.home() / ".pm-studio"))
@@ -125,6 +187,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--project", help="要安裝或更新的產品專案資料夾")
     ap.add_argument("--all", action="store_true", help="更新專案總覽裡登記的所有專案")
+    ap.add_argument("--github", choices=["private", "public", "off"],
+                    help="安裝後在 GitHub 建立儲存庫並推送（預設沿用上次的選擇；沒選過時不建立）")
+    ap.add_argument("--repo-name", help="GitHub 儲存庫名稱（只能用英文、數字、- _ .；預設由資料夾名推導）")
     ap.add_argument("--skip", nargs="*", default=[], choices=["工作流", "設計層", "工作台"])
     args = ap.parse_args()
     if args.all:
@@ -143,6 +208,7 @@ def main():
     register(root)
     setup_git(root)
     commit_tooling(root)
+    setup_github(root, args.github, args.repo_name)
     print(f"\n全部裝好：{root}")
     print("下一步：雙擊專案裡的「開啟PM工作台」，先按「設計方向」定這個產品的 PRODUCT.md 與 DESIGN.md。")
     print("        所有專案的進度：雙擊本套件裡的「開啟專案總覽」。")

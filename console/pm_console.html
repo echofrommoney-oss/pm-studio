@@ -205,6 +205,7 @@ tr.detail > td{background:#faf9fc;padding:12px 14px 16px}
     <span id="st-export"></span>
     <span id="st-design"></span>
     <span id="st-sb"></span>
+    <span id="st-git"></span>
   </div>
 </header>
 
@@ -400,6 +401,17 @@ async function refreshState(){
     : ex.starting ? '<span class="dot warn"></span>匯出服務啟動中…'
     : '<span class="dot warn"></span>匯出服務未啟動 <button class="linkbtn" id="btn-export">啟動</button>';
   const b = $('#btn-export'); if (b) b.onclick = startExport;
+  const g = st.git || {};
+  $('#st-git').innerHTML = !g.remote ? '<span class="dot"></span>未連到 GitHub'
+    : g.unpushed === null ? '<span class="dot warn"></span>尚未設定上游 <button class="linkbtn" id="btn-push">推送</button>'
+    : g.unpushed ? `<span class="dot warn"></span>${g.unpushed} 個提交未推送 <button class="linkbtn" id="btn-push">推送</button>`
+    : '<span class="dot ok"></span>GitHub 已同步';
+  const pb = $('#btn-push');
+  if (pb) pb.onclick = async () => {
+    pb.disabled = true; pb.textContent = '推送中…';
+    try{ const r = await api('/api/git/push', {}); toast(r.message); }catch(e){ alert(e.message); }
+    refreshState();
+  };
   $('#st-design').innerHTML = !st.design_installed ? '<span class="dot"></span>未安裝設計層'
     : st.has_design_md ? '<span class="dot ok"></span>DESIGN.md 已建立'
     : '<span class="dot warn"></span>尚未定設計方向';
